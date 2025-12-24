@@ -43,7 +43,17 @@ const initialState: GlobalState = {
       twoFactor: false,
       biometric: true
     }
-  }
+  },
+  // Discovery
+  posts: [],
+  trendingUsers: [],
+  // Spaces Detail
+  selectedSpaceId: null,
+  spaceDetails: {},
+  spacePosts: {},
+  spaceEvents: {},
+  spaceFiles: {},
+  spaceMembers: {}
 };
 
 // --- REDUCER ---
@@ -410,6 +420,160 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
             : c
         )
       };
+
+    // Discovery Reducers
+    case 'SET_POSTS':
+      return { ...state, posts: action.payload };
+
+    case 'ADD_POST':
+      return { ...state, posts: [action.payload, ...state.posts] };
+
+    case 'TOGGLE_POST_LIKE': {
+      const { postId, isLiked } = action.payload;
+      return {
+        ...state,
+        posts: state.posts.map(p =>
+          p.id === postId
+            ? { ...p, isLiked, likesCount: isLiked ? p.likesCount + 1 : p.likesCount - 1 }
+            : p
+        )
+      };
+    }
+
+    case 'UPDATE_POST_COUNTS': {
+      const { postId, likesCount, commentsCount, sharesCount } = action.payload;
+      return {
+        ...state,
+        posts: state.posts.map(p =>
+          p.id === postId
+            ? {
+              ...p,
+              ...(likesCount !== undefined && { likesCount }),
+              ...(commentsCount !== undefined && { commentsCount }),
+              ...(sharesCount !== undefined && { sharesCount })
+            }
+            : p
+        )
+      };
+    }
+
+    case 'SET_TRENDING_USERS':
+      return { ...state, trendingUsers: action.payload };
+
+    case 'TOGGLE_FOLLOW_USER': {
+      const { userId, isFollowing } = action.payload;
+      return {
+        ...state,
+        trendingUsers: state.trendingUsers.map(u =>
+          u.id === userId
+            ? { ...u, isFollowing, followersCount: isFollowing ? u.followersCount + 1 : u.followersCount - 1 }
+            : u
+        )
+      };
+    }
+
+    // Spaces Reducers
+    case 'SELECT_SPACE':
+      return { ...state, selectedSpaceId: action.payload };
+
+    case 'SET_SPACE_DETAIL': {
+      const { spaceId, detail } = action.payload;
+      return {
+        ...state,
+        spaceDetails: { ...state.spaceDetails, [spaceId]: detail }
+      };
+    }
+
+    case 'SET_SPACE_POSTS': {
+      const { spaceId, posts } = action.payload;
+      return {
+        ...state,
+        spacePosts: { ...state.spacePosts, [spaceId]: posts }
+      };
+    }
+
+    case 'ADD_SPACE_POST': {
+      const { spaceId, post } = action.payload;
+      const currentPosts = state.spacePosts[spaceId] || [];
+      return {
+        ...state,
+        spacePosts: { ...state.spacePosts, [spaceId]: [post, ...currentPosts] }
+      };
+    }
+
+    case 'TOGGLE_SPACE_POST_LIKE': {
+      const { spaceId, postId, isLiked } = action.payload;
+      const posts = state.spacePosts[spaceId] || [];
+      return {
+        ...state,
+        spacePosts: {
+          ...state.spacePosts,
+          [spaceId]: posts.map(p =>
+            p.id === postId
+              ? { ...p, isLiked, likesCount: isLiked ? p.likesCount + 1 : p.likesCount - 1 }
+              : p
+          )
+        }
+      };
+    }
+
+    case 'SET_SPACE_EVENTS': {
+      const { spaceId, events } = action.payload;
+      return {
+        ...state,
+        spaceEvents: { ...state.spaceEvents, [spaceId]: events }
+      };
+    }
+
+    case 'ADD_SPACE_EVENT': {
+      const { spaceId, event } = action.payload;
+      const currentEvents = state.spaceEvents[spaceId] || [];
+      return {
+        ...state,
+        spaceEvents: { ...state.spaceEvents, [spaceId]: [event, ...currentEvents] }
+      };
+    }
+
+    case 'TOGGLE_EVENT_ATTENDANCE': {
+      const { spaceId, eventId, isAttending } = action.payload;
+      const events = state.spaceEvents[spaceId] || [];
+      return {
+        ...state,
+        spaceEvents: {
+          ...state.spaceEvents,
+          [spaceId]: events.map(e =>
+            e.id === eventId
+              ? { ...e, isAttending, attendeesCount: isAttending ? e.attendeesCount + 1 : e.attendeesCount - 1 }
+              : e
+          )
+        }
+      };
+    }
+
+    case 'SET_SPACE_FILES': {
+      const { spaceId, files } = action.payload;
+      return {
+        ...state,
+        spaceFiles: { ...state.spaceFiles, [spaceId]: files }
+      };
+    }
+
+    case 'ADD_SPACE_FILE': {
+      const { spaceId, file } = action.payload;
+      const currentFiles = state.spaceFiles[spaceId] || [];
+      return {
+        ...state,
+        spaceFiles: { ...state.spaceFiles, [spaceId]: [file, ...currentFiles] }
+      };
+    }
+
+    case 'SET_SPACE_MEMBERS': {
+      const { spaceId, members } = action.payload;
+      return {
+        ...state,
+        spaceMembers: { ...state.spaceMembers, [spaceId]: members }
+      };
+    }
 
     default:
       return state;

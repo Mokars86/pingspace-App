@@ -84,6 +84,106 @@ export interface Space {
   joined?: boolean;
 }
 
+// Discovery & Social Types
+export interface Post {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  content: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'none';
+  likesCount: number;
+  commentsCount: number;
+  sharesCount: number;
+  isLiked?: boolean;
+  visibility: 'public' | 'friends' | 'private';
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface PostComment {
+  id: string;
+  postId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  content: string;
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface TrendingUser extends User {
+  followersCount: number;
+  followingCount: number;
+  postsCount: number;
+  isFollowing?: boolean;
+  isVerified?: boolean;
+}
+
+// Enhanced Space Types
+export interface SpacePost {
+  id: string;
+  spaceId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  content: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video' | 'none';
+  likesCount: number;
+  commentsCount: number;
+  isLiked?: boolean;
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface SpaceEvent {
+  id: string;
+  spaceId: string;
+  createdBy: string;
+  creatorName: string;
+  creatorAvatar: string;
+  title: string;
+  description: string;
+  eventDate: number;
+  location: string;
+  attendeesCount: number;
+  isAttending?: boolean;
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface SpaceFile {
+  id: string;
+  spaceId: string;
+  uploadedBy: string;
+  uploaderName: string;
+  uploaderAvatar: string;
+  fileName: string;
+  fileUrl: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface SpaceMember extends User {
+  joinedAt: number;
+  role?: 'admin' | 'moderator' | 'member';
+}
+
+export interface SpaceDetail extends Space {
+  bannerImage?: string;
+  descriptionLong?: string;
+  category?: string;
+  isPublic: boolean;
+  postsCount: number;
+  eventsCount: number;
+  filesCount: number;
+  latestPost?: SpacePost;
+}
+
 export interface Transaction {
   id: string;
   type: 'received' | 'sent' | 'withdraw' | 'deposit';
@@ -188,6 +288,16 @@ export interface GlobalState {
   activeCall: ActiveCall | null;
   isOnline: boolean;
   settings: AppSettings;
+  // Discovery
+  posts: Post[];
+  trendingUsers: TrendingUser[];
+  // Spaces Detail
+  selectedSpaceId: string | null;
+  spaceDetails: Record<string, SpaceDetail>;
+  spacePosts: Record<string, SpacePost[]>;
+  spaceEvents: Record<string, SpaceEvent[]>;
+  spaceFiles: Record<string, SpaceFile[]>;
+  spaceMembers: Record<string, SpaceMember[]>;
 }
 
 export type Action =
@@ -234,4 +344,24 @@ export type Action =
   | { type: 'TOGGLE_CALL_VIDEO' }
   | { type: 'SET_ONLINE_STATUS'; payload: boolean }
   | { type: 'UPDATE_SETTING'; payload: { section: keyof AppSettings; key: string; value: any } }
-  | { type: 'TOGGLE_PIN_CHAT'; payload: { chatId: string; isPinned: boolean } };
+  | { type: 'TOGGLE_PIN_CHAT'; payload: { chatId: string; isPinned: boolean } }
+  // Discovery Actions
+  | { type: 'SET_POSTS'; payload: Post[] }
+  | { type: 'ADD_POST'; payload: Post }
+  | { type: 'TOGGLE_POST_LIKE'; payload: { postId: string; isLiked: boolean } }
+  | { type: 'UPDATE_POST_COUNTS'; payload: { postId: string; likesCount?: number; commentsCount?: number; sharesCount?: number } }
+  | { type: 'SET_TRENDING_USERS'; payload: TrendingUser[] }
+  | { type: 'TOGGLE_FOLLOW_USER'; payload: { userId: string; isFollowing: boolean } }
+  // Spaces Actions
+  | { type: 'SELECT_SPACE'; payload: string | null }
+  | { type: 'SET_SPACE_DETAIL'; payload: { spaceId: string; detail: SpaceDetail } }
+  | { type: 'SET_SPACE_POSTS'; payload: { spaceId: string; posts: SpacePost[] } }
+  | { type: 'ADD_SPACE_POST'; payload: { spaceId: string; post: SpacePost } }
+  | { type: 'TOGGLE_SPACE_POST_LIKE'; payload: { spaceId: string; postId: string; isLiked: boolean } }
+  | { type: 'SET_SPACE_EVENTS'; payload: { spaceId: string; events: SpaceEvent[] } }
+  | { type: 'ADD_SPACE_EVENT'; payload: { spaceId: string; event: SpaceEvent } }
+  | { type: 'TOGGLE_EVENT_ATTENDANCE'; payload: { spaceId: string; eventId: string; isAttending: boolean } }
+  | { type: 'SET_SPACE_FILES'; payload: { spaceId: string; files: SpaceFile[] } }
+  | { type: 'ADD_SPACE_FILE'; payload: { spaceId: string; file: SpaceFile } }
+  | { type: 'SET_SPACE_MEMBERS'; payload: { spaceId: string; members: SpaceMember[] } };
+

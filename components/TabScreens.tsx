@@ -809,24 +809,261 @@ export const StatusScreen: React.FC = () => {
   );
 };
 
-// Fixed: Added missing DiscoveryScreen export
-export const DiscoveryScreen: React.FC = () => {
+// Discovery Screen - Full Implementation
+const PostCard: React.FC<{ post: any; onLike: () => void; onShare: () => void }> = ({ post, onLike, onShare }) => {
+  const [showComments, setShowComments] = useState(false);
   return (
-    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
-      <h2 className="text-2xl font-black uppercase tracking-tighter mb-4 text-slate-900 dark:text-white">Discover</h2>
-      <div className="flex flex-col items-center justify-center py-20 opacity-40">
-        <Compass className="w-16 h-16 mb-4 text-slate-300" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No trending content</p>
+    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+      <div className="p-4 flex items-center gap-3">
+        <img src={post.userAvatar} alt={post.userName} className="w-10 h-10 rounded-full object-cover" />
+        <div className="flex-1">
+          <h4 className="font-black text-slate-900 dark:text-white text-sm">{post.userName}</h4>
+          <p className="text-[9px] text-slate-400 font-bold">{post.timestamp}</p>
+        </div>
+        <button className="p-2 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-full transition-colors"><MoreHorizontal className="w-5 h-5 text-slate-400" /></button>
+      </div>
+      <div className="px-4 pb-3"><p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{post.content}</p></div>
+      {post.mediaUrl && post.mediaType === 'image' && (<div className="w-full bg-gray-100 dark:bg-slate-800"><img src={post.mediaUrl} alt="" className="w-full object-cover max-h-96" /></div>)}
+      <div className="p-4 flex items-center justify-between border-t border-gray-100 dark:border-slate-800">
+        <div className="flex items-center gap-6">
+          <button onClick={onLike} className="flex items-center gap-2 group">
+            <Heart className={`w-5 h-5 transition-all ${post.isLiked ? 'fill-[#ff1744] text-[#ff1744]' : 'text-slate-400 group-hover:text-[#ff1744]'}`} />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{post.likesCount}</span>
+          </button>
+          <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 group">
+            <MessageCircle className="w-5 h-5 text-slate-400 group-hover:text-[#ff1744] transition-colors" />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{post.commentsCount}</span>
+          </button>
+          <button onClick={onShare} className="flex items-center gap-2 group">
+            <Share2 className="w-5 h-5 text-slate-400 group-hover:text-[#ff1744] transition-colors" />
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{post.sharesCount}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
 };
 
-// Fixed: Added missing SpacesScreen export
-export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
+const CreatePostModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const dispatch = useGlobalDispatch();
+  const [content, setContent] = useState('');
+  const [loading, setLoading] = useState(false);
+  const handlePost = async () => {
+    if (!content.trim()) return;
+    setLoading(true);
+    try {
+      const post = await api.discovery.createPost({ content, visibility: 'public' });
+      dispatch({ type: 'ADD_POST', payload: post });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Post created!' } });
+      onClose();
+      setContent('');
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    } finally {
+      setLoading(false);
+    }
+  };
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Create Post</h3>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+        </div>
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="What's on your mind?" className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 min-h-[150px]" />
+        <div className="flex justify-end gap-3 mt-4">
+          <button onClick={onClose} className="px-6 py-3 bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-bold text-sm hover:scale-105 active:scale-95 transition-all">Cancel</button>
+          <button onClick={handlePost} disabled={!content.trim() || loading} className="px-6 py-3 bg-[#ff1744] text-white rounded-2xl font-bold text-sm hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+            {loading && <Loader2 className="w-4 h-4 animate-spin" />}Post
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const DiscoveryScreen: React.FC = () => {
+  const { posts, trendingUsers, products } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'people' | 'posts' | 'products' | 'spaces'>('all');
+  const [loading, setLoading] = useState(false);
+  const [searchResults, setSearchResults] = useState<any>(null);
+  const [showCreatePost, setShowCreatePost] = useState(false);
+
+  useEffect(() => {
+    loadDiscoveryData();
+  }, []);
+
+  const loadDiscoveryData = async () => {
+    setLoading(true);
+    try {
+      const [trendingPeople, publicPosts] = await Promise.all([
+        api.discovery.getTrendingPeople(10),
+        api.discovery.getPublicPosts(20)
+      ]);
+      dispatch({ type: 'SET_TRENDING_USERS', payload: trendingPeople });
+      dispatch({ type: 'SET_POSTS', payload: publicPosts });
+    } catch (e) {
+      console.error('Load discovery data error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const results = await api.discovery.search(searchQuery, activeFilter);
+        setSearchResults(results);
+      } catch (e) {
+        console.error('Search error:', e);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery, activeFilter]);
+
+  const handleFollowToggle = async (userId: string, isFollowing: boolean) => {
+    try {
+      if (isFollowing) await api.discovery.unfollowUser(userId);
+      else await api.discovery.followUser(userId);
+      dispatch({ type: 'TOGGLE_FOLLOW_USER', payload: { userId, isFollowing: !isFollowing } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  const handlePostLike = async (postId: string, isLiked: boolean) => {
+    try {
+      if (isLiked) await api.discovery.unlikePost(postId);
+      else await api.discovery.likePost(postId);
+      dispatch({ type: 'TOGGLE_POST_LIKE', payload: { postId, isLiked: !isLiked } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  const handleShare = async (postId: string) => {
+    try {
+      await api.discovery.sharePost(postId);
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Post shared!' } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  const displayPosts = searchResults ? searchResults.posts : posts;
+  const displayPeople = searchResults ? searchResults.people : trendingUsers;
+  const displayProducts = searchResults ? searchResults.products : products;
+
+  return (
+    <div className="min-h-full bg-gray-50 dark:bg-slate-950 overflow-y-auto no-scrollbar pb-32">
+      <CreatePostModal isOpen={showCreatePost} onClose={() => setShowCreatePost(false)} />
+      <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+            <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search users, spaces, products..." className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all" />
+            {loading && <Loader2 className="absolute right-4 top-3.5 w-5 h-5 text-[#ff1744] animate-spin" />}
+          </div>
+          <button onClick={() => setShowCreatePost(true)} className="p-3.5 bg-[#ff1744] text-white rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-red-500/30"><Plus className="w-5 h-5" /></button>
+        </div>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {(['all', 'people', 'posts', 'products', 'spaces'] as const).map(filter => (
+            <button key={filter} onClick={() => setActiveFilter(filter)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${activeFilter === filter ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20' : 'bg-gray-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>{filter}</button>
+          ))}
+        </div>
+      </div>
+      <div className="p-4 space-y-6">
+        {(activeFilter === 'all' || activeFilter === 'people') && displayPeople.length > 0 && (
+          <div>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-2">Trending People</h3>
+            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
+              {displayPeople.map((user: any) => (
+                <div key={user.id} className="flex-shrink-0 w-32">
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl p-4 border border-gray-100 dark:border-slate-800 text-center">
+                    <div className="relative inline-block mb-3">
+                      <img src={user.avatar} alt={user.name} className="w-16 h-16 rounded-full object-cover" />
+                      {user.isVerified && (<div className="absolute -bottom-1 -right-1 w-5 h-5 bg-[#ff1744] rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900"><Check className="w-3 h-3 text-white" /></div>)}
+                    </div>
+                    <h4 className="font-black text-sm text-slate-900 dark:text-white truncate mb-1">{user.name}</h4>
+                    <p className="text-[9px] text-slate-400 font-bold mb-3">{user.followersCount} followers</p>
+                    <button onClick={() => handleFollowToggle(user.id, user.isFollowing || false)} className={`w-full py-2 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all ${user.isFollowing ? 'bg-gray-100 dark:bg-slate-800 text-slate-500' : 'bg-[#ff1744] text-white shadow-md'}`}>{user.isFollowing ? 'Following' : 'Follow'}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(activeFilter === 'all' || activeFilter === 'posts') && displayPosts.length > 0 && (
+          <div>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-2">Public Posts</h3>
+            <div className="space-y-4">{displayPosts.map((post: any) => (<PostCard key={post.id} post={post} onLike={() => handlePostLike(post.id, post.isLiked || false)} onShare={() => handleShare(post.id)} />))}</div>
+          </div>
+        )}
+        {(activeFilter === 'all' || activeFilter === 'products') && displayProducts.length > 0 && (
+          <div>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 px-2">Popular Products</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {displayProducts.slice(0, 6).map((product: any) => (
+                <div key={product.id} className="bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-gray-100 dark:border-slate-800 group">
+                  <div className="aspect-square bg-gray-100 dark:bg-slate-800 overflow-hidden"><img src={product.image} alt={product.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform" /></div>
+                  <div className="p-3">
+                    <h4 className="font-black text-sm text-slate-900 dark:text-white truncate mb-1">{product.title}</h4>
+                    <p className="text-[#ff1744] font-black text-lg mb-2">${product.price}</p>
+                    <button onClick={() => dispatch({ type: 'ADD_TO_CART', payload: product })} className="w-full py-2 bg-[#ff1744] text-white rounded-xl text-[9px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all">Quick Buy</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {!loading && displayPosts.length === 0 && displayPeople.length === 0 && displayProducts.length === 0 && (
+          <div className="py-20 text-center opacity-30">
+            <Compass className="w-16 h-16 mx-auto mb-4 text-slate-300" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{searchQuery ? 'No results found' : 'No content available'}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Enhanced Spaces Screen Implementation
+export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
+  const { selectedSpaceId, spaceDetails } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [activeTab, setActiveTab] = useState<'joined' | 'explore'>('joined');
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
+  const [joinedSpaces, setJoinedSpaces] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadSpaces();
+  }, [activeTab]);
+
+  const loadSpaces = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'joined') {
+        const joined = await api.spaces.getJoinedSpaces();
+        setJoinedSpaces(joined);
+      }
+    } catch (e) {
+      console.error('Load spaces error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggleJoin = async (space: Space) => {
     setLoadingIds(prev => new Set(prev).add(space.id));
@@ -837,9 +1074,10 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
         await api.spaces.join(space.id);
       }
       dispatch({ type: 'JOIN_SPACE', payload: space.id });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: space.joined ? `Left ${space.name}` : `Linked to ${space.name}` } });
-    } catch (e) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Connection failed' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: space.joined ? `Left ${space.name}` : `Joined ${space.name}` } });
+      loadSpaces();
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
     } finally {
       setLoadingIds(prev => {
         const next = new Set(prev);
@@ -849,62 +1087,283 @@ export const SpacesScreen: React.FC<{ spaces: Space[] }> = ({ spaces }) => {
     }
   };
 
+  const handleSpaceClick = async (spaceId: string) => {
+    dispatch({ type: 'SELECT_SPACE', payload: spaceId });
+    try {
+      const detail = await api.spaces.getSpaceDetail(spaceId);
+      if (detail) {
+        dispatch({ type: 'SET_SPACE_DETAIL', payload: { spaceId, detail } });
+      }
+    } catch (e) {
+      console.error('Load space detail error:', e);
+    }
+  };
+
+  const displaySpaces = activeTab === 'joined' ? joinedSpaces : spaces.filter(s => !s.joined);
+
+  // If a space is selected, show detail view
+  if (selectedSpaceId && spaceDetails[selectedSpaceId]) {
+    return <SpaceDetailView spaceId={selectedSpaceId} />;
+  }
+
   return (
-    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
+    <div className="min-h-full bg-gray-50 dark:bg-slate-950 overflow-y-auto no-scrollbar pb-32">
       <CreateSpaceModal isOpen={showCreate} onClose={() => setShowCreate(false)} />
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Explore Spaces</h2>
-        <button onClick={() => setShowCreate(true)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:scale-105 active:scale-95 transition-all">
-          <Plus className="w-5 h-5 text-slate-900 dark:text-white" />
-        </button>
+      <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Spaces</h2>
+          <button onClick={() => setShowCreate(true)} className="p-3 bg-[#ff1744] text-white rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-red-500/30"><Plus className="w-5 h-5" /></button>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => setActiveTab('joined')} className={`flex-1 py-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all ${activeTab === 'joined' ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20' : 'bg-gray-100 dark:bg-slate-800 text-slate-500'}`}>Joined</button>
+          <button onClick={() => setActiveTab('explore')} className={`flex-1 py-3 rounded-2xl text-sm font-black uppercase tracking-wider transition-all ${activeTab === 'explore' ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20' : 'bg-gray-100 dark:bg-slate-800 text-slate-500'}`}>Explore</button>
+        </div>
       </div>
-      <div className="grid gap-4">
-        {spaces.length === 0 ? (
-          <div className="py-20 text-center opacity-30">
-            <Layers className="w-12 h-12 mx-auto mb-4" />
-            <p className="text-[10px] font-black uppercase tracking-widest">No spaces found</p>
-          </div>
-        ) : spaces.map(space => (
-          <div key={space.id} className="p-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 flex items-center justify-between group shadow-sm hover:shadow-md transition-all">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-50">
-                <img src={space.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform" alt="" />
-              </div>
-              <div>
-                <h4 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">{space.name}</h4>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{space.members.toLocaleString()} Active Nodes</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  if (space.joined) {
-                    dispatch({ type: 'SET_TAB', payload: 'chats' });
-                  } else {
-                    handleToggleJoin(space);
-                  }
-                }}
-                disabled={loadingIds.has(space.id)}
-                className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase transition-all flex items-center gap-2 ${space.joined ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-105 shadow-md' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'}`}
-              >
-                {loadingIds.has(space.id) ? <Loader2 className="w-3 h-3 animate-spin" /> : (
-                  space.joined ? (
+      <div className="p-4 grid gap-4">
+        {loading ? (
+          <div className="py-20 text-center"><Loader2 className="w-8 h-8 mx-auto mb-4 text-[#ff1744] animate-spin" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading spaces...</p></div>
+        ) : displaySpaces.length === 0 ? (
+          <div className="py-20 text-center opacity-30"><Layers className="w-12 h-12 mx-auto mb-4 text-slate-300" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{activeTab === 'joined' ? 'No joined spaces' : 'No spaces found'}</p></div>
+        ) : (
+          displaySpaces.map(space => (
+            <div key={space.id} className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden border border-gray-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-all">
+              <div className="p-5">
+                <div className="flex items-start gap-4 mb-4">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gray-100 dark:bg-slate-800 flex-shrink-0"><img src={space.image} alt={space.name} className="w-full h-full object-cover" /></div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-black text-lg text-slate-900 dark:text-white uppercase tracking-tight truncate">{space.name}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{space.members.toLocaleString()} Members</p>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-2">{space.description}</p>
+                <div className="flex gap-2">
+                  {space.joined ? (
                     <>
-                      <MessageCircle className="w-4 h-4" />
-                      Enter
+                      <button onClick={() => handleSpaceClick(space.id)} className="flex-1 py-3 bg-[#ff1744] text-white rounded-2xl text-sm font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all shadow-lg shadow-red-500/20">Open</button>
+                      <button onClick={(e) => { e.stopPropagation(); handleToggleJoin(space); }} disabled={loadingIds.has(space.id)} className="px-4 py-3 bg-gray-100 dark:bg-slate-800 text-slate-500 rounded-2xl hover:text-red-500 transition-colors">{loadingIds.has(space.id) ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogOut className="w-5 h-5" />}</button>
                     </>
-                  ) : 'Link Up'
-                )}
-              </button>
-              {space.joined && (
-                <button onClick={() => handleToggleJoin(space)} className="p-2.5 rounded-2xl bg-gray-50 dark:bg-slate-800 text-slate-400 hover:text-red-500 transition-colors">
-                  <LogOut className="w-4 h-4" />
-                </button>
-              )}
+                  ) : (
+                    <button onClick={(e) => { e.stopPropagation(); handleToggleJoin(space); }} disabled={loadingIds.has(space.id)} className="flex-1 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-sm font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-2">{loadingIds.has(space.id) ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Join Space'}</button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Space Detail View Component
+const SpaceDetailView: React.FC<{ spaceId: string }> = ({ spaceId }) => {
+  const { spaceDetails, spacePosts, spaceEvents, spaceFiles, spaceMembers } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [activeTab, setActiveTab] = useState<'discussion' | 'events' | 'files' | 'members'>('discussion');
+  const [loading, setLoading] = useState(false);
+  const space = spaceDetails[spaceId];
+
+  useEffect(() => {
+    loadSpaceContent();
+  }, [spaceId, activeTab]);
+
+  const loadSpaceContent = async () => {
+    setLoading(true);
+    try {
+      if (activeTab === 'discussion') {
+        const posts = await api.spaces.getSpacePosts(spaceId);
+        dispatch({ type: 'SET_SPACE_POSTS', payload: { spaceId, posts } });
+      } else if (activeTab === 'events') {
+        const events = await api.spaces.getSpaceEvents(spaceId);
+        dispatch({ type: 'SET_SPACE_EVENTS', payload: { spaceId, events } });
+      } else if (activeTab === 'files') {
+        const files = await api.spaces.getSpaceFiles(spaceId);
+        dispatch({ type: 'SET_SPACE_FILES', payload: { spaceId, files } });
+      } else if (activeTab === 'members') {
+        const members = await api.spaces.getSpaceMembers(spaceId);
+        dispatch({ type: 'SET_SPACE_MEMBERS', payload: { spaceId, members } });
+      }
+    } catch (e) {
+      console.error('Load space content error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!space) return null;
+
+  return (
+    <div className="min-h-full bg-gray-50 dark:bg-slate-950 overflow-y-auto no-scrollbar pb-32">
+      <div className="relative">
+        <div className="h-48 bg-gradient-to-br from-[#ff1744] to-purple-600" />
+        <button onClick={() => dispatch({ type: 'SELECT_SPACE', payload: null })} className="absolute top-4 left-4 p-3 bg-black/50 backdrop-blur-md text-white rounded-2xl hover:scale-105 active:scale-95 transition-all"><ArrowLeft className="w-5 h-5" /></button>
+        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
+          <div className="flex items-end gap-4">
+            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border-4 border-white dark:border-slate-900"><img src={space.image} alt={space.name} className="w-full h-full object-cover" /></div>
+            <div className="flex-1">
+              <h1 className="text-2xl font-black text-white uppercase tracking-tight mb-1">{space.name}</h1>
+              <p className="text-sm text-white/80">{space.members.toLocaleString()} members</p>
             </div>
           </div>
-        ))}
+        </div>
       </div>
+      <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 p-4">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {(['discussion', 'events', 'files', 'members'] as const).map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${activeTab === tab ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20' : 'bg-gray-100 dark:bg-slate-800 text-slate-500'}`}>{tab}</button>
+          ))}
+        </div>
+      </div>
+      <div className="p-4">
+        {activeTab === 'discussion' && <SpaceDiscussionTab spaceId={spaceId} posts={spacePosts[spaceId] || []} loading={loading} />}
+        {activeTab === 'events' && <SpaceEventsTab spaceId={spaceId} events={spaceEvents[spaceId] || []} loading={loading} />}
+        {activeTab === 'files' && <SpaceFilesTab spaceId={spaceId} files={spaceFiles[spaceId] || []} loading={loading} />}
+        {activeTab === 'members' && <SpaceMembersTab members={spaceMembers[spaceId] || []} loading={loading} />}
+      </div>
+    </div>
+  );
+};
+
+// Space Discussion Tab
+const SpaceDiscussionTab: React.FC<{ spaceId: string; posts: any[]; loading: boolean }> = ({ spaceId, posts, loading }) => {
+  const dispatch = useGlobalDispatch();
+  const [content, setContent] = useState('');
+  const [posting, setPosting] = useState(false);
+
+  const handlePost = async () => {
+    if (!content.trim()) return;
+    setPosting(true);
+    try {
+      const post = await api.spaces.createSpacePost(spaceId, { content });
+      dispatch({ type: 'ADD_SPACE_POST', payload: { spaceId, post } });
+      setContent('');
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Posted!' } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleLike = async (postId: string, isLiked: boolean) => {
+    try {
+      if (isLiked) await api.spaces.unlikeSpacePost(postId);
+      else await api.spaces.likeSpacePost(postId);
+      dispatch({ type: 'TOGGLE_SPACE_POST_LIKE', payload: { spaceId, postId, isLiked: !isLiked } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-4">
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="Share something with the space..." className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-4 text-slate-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 min-h-[100px] mb-3" />
+        <div className="flex justify-end">
+          <button onClick={handlePost} disabled={!content.trim() || posting} className="px-6 py-2.5 bg-[#ff1744] text-white rounded-2xl text-sm font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">{posting && <Loader2 className="w-4 h-4 animate-spin" />}Post</button>
+        </div>
+      </div>
+      {loading ? (
+        <div className="py-10 text-center"><Loader2 className="w-8 h-8 mx-auto mb-4 text-[#ff1744] animate-spin" /></div>
+      ) : posts.length === 0 ? (
+        <div className="py-10 text-center opacity-30"><MessageCircle className="w-12 h-12 mx-auto mb-4 text-slate-300" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No posts yet</p></div>
+      ) : (
+        posts.map(post => (
+          <div key={post.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+            <div className="p-4 flex items-center gap-3">
+              <img src={post.userAvatar} alt={post.userName} className="w-10 h-10 rounded-full object-cover" />
+              <div><h4 className="font-black text-slate-900 dark:text-white text-sm">{post.userName}</h4><p className="text-[9px] text-slate-400 font-bold">{post.timestamp}</p></div>
+            </div>
+            <div className="px-4 pb-4"><p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{post.content}</p></div>
+            <div className="px-4 pb-4 flex items-center gap-6 border-t border-gray-100 dark:border-slate-800 pt-4">
+              <button onClick={() => handleLike(post.id, post.isLiked || false)} className="flex items-center gap-2 group">
+                <Heart className={`w-5 h-5 transition-all ${post.isLiked ? 'fill-[#ff1744] text-[#ff1744]' : 'text-slate-400 group-hover:text-[#ff1744]'}`} />
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">{post.likesCount}</span>
+              </button>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+};
+
+// Space Events Tab
+const SpaceEventsTab: React.FC<{ spaceId: string; events: any[]; loading: boolean }> = ({ spaceId, events, loading }) => {
+  const dispatch = useGlobalDispatch();
+  const handleAttend = async (eventId: string, isAttending: boolean) => {
+    try {
+      if (isAttending) await api.spaces.leaveEvent(eventId);
+      else await api.spaces.attendEvent(eventId);
+      dispatch({ type: 'TOGGLE_EVENT_ATTENDANCE', payload: { spaceId, eventId, isAttending: !isAttending } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  if (loading) return <div className="py-10 text-center"><Loader2 className="w-8 h-8 mx-auto mb-4 text-[#ff1744] animate-spin" /></div>;
+  if (events.length === 0) return <div className="py-10 text-center opacity-30"><Calendar className="w-12 h-12 mx-auto mb-4 text-slate-300" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No events scheduled</p></div>;
+
+  return (
+    <div className="space-y-4">
+      {events.map(event => (
+        <div key={event.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-5">
+          <div className="flex items-start gap-4 mb-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#ff1744]/10 flex items-center justify-center flex-shrink-0"><Calendar className="w-6 h-6 text-[#ff1744]" /></div>
+            <div className="flex-1">
+              <h4 className="font-black text-lg text-slate-900 dark:text-white mb-1">{event.title}</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-2">{new Date(event.eventDate).toLocaleDateString()}</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-3">{event.description}</p>
+              <div className="flex items-center gap-2 text-xs text-slate-500"><MapPin className="w-4 h-4" /><span>{event.location}</span></div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-slate-800">
+            <span className="text-xs text-slate-500">{event.attendeesCount} attending</span>
+            <button onClick={() => handleAttend(event.id, event.isAttending || false)} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all ${event.isAttending ? 'bg-gray-100 dark:bg-slate-800 text-slate-500' : 'bg-[#ff1744] text-white shadow-md'}`}>{event.isAttending ? 'Attending' : 'Attend'}</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Space Files Tab
+const SpaceFilesTab: React.FC<{ spaceId: string; files: any[]; loading: boolean }> = ({ spaceId, files, loading }) => {
+  if (loading) return <div className="py-10 text-center"><Loader2 className="w-8 h-8 mx-auto mb-4 text-[#ff1744] animate-spin" /></div>;
+  if (files.length === 0) return <div className="py-10 text-center opacity-30"><HardDrive className="w-12 h-12 mx-auto mb-4 text-slate-300" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No files uploaded</p></div>;
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      {files.map(file => (
+        <div key={file.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 p-4">
+          <div className="w-full aspect-square bg-gray-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mb-3"><HardDrive className="w-12 h-12 text-slate-400" /></div>
+          <h4 className="font-bold text-sm text-slate-900 dark:text-white truncate mb-1">{file.fileName}</h4>
+          <p className="text-[9px] text-slate-400">{(file.fileSize / 1024).toFixed(1)} KB</p>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Space Members Tab
+const SpaceMembersTab: React.FC<{ members: any[]; loading: boolean }> = ({ members, loading }) => {
+  if (loading) return <div className="py-10 text-center"><Loader2 className="w-8 h-8 mx-auto mb-4 text-[#ff1744] animate-spin" /></div>;
+  if (members.length === 0) return <div className="py-10 text-center opacity-30"><Users className="w-12 h-12 mx-auto mb-4 text-slate-300" /><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No members</p></div>;
+
+  return (
+    <div className="space-y-2">
+      {members.map(member => (
+        <div key={member.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800 p-4 flex items-center gap-4">
+          <img src={member.avatar} alt={member.name} className="w-12 h-12 rounded-full object-cover" />
+          <div className="flex-1">
+            <div className="flex items-center gap-2">
+              <h4 className="font-black text-slate-900 dark:text-white">{member.name}</h4>
+              {member.role === 'admin' && <span className="px-2 py-0.5 bg-[#ff1744] text-white text-[8px] font-black uppercase rounded-full">Admin</span>}
+            </div>
+            <p className="text-xs text-slate-500">{member.bio || member.status}</p>
+          </div>
+        </div>
+      ))}
     </div>
   );
 };
