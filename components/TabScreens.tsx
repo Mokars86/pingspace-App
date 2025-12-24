@@ -7,7 +7,7 @@ import {
   Wallet, ArrowUpRight, ArrowDownLeft, QrCode,
   CreditCard, Send, Scan, Target,
   Zap, TrendingUp,
-  Compass, User as UserIcon, ArrowRightLeft, X, Trash2,
+  Compass, User as UserIcon, ArrowRightLeft, X, Trash2, ArrowLeft,
   Lock, Fingerprint, Check,
   ChevronLeft, ChevronRight, Camera, Moon, Sun, ShieldCheck, Key,
   Layout, ListTodo, Calendar, Link, MoreHorizontal,

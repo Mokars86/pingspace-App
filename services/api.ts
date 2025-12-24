@@ -554,9 +554,6 @@ export const api = {
 
       const { error } = await supabase.from('space_members').insert({ space_id: id, user_id: user.id, role: 'member' });
       if (error) throw new Error(formatError(error, "Failed to join space"));
-
-      // Increment member count
-      await supabase.from('spaces').update({ member_count: supabase.raw('member_count + 1') } as any).eq('id', id);
     },
 
     leave: async (id: string): Promise<void> => {
@@ -565,9 +562,6 @@ export const api = {
 
       const { error } = await supabase.from('space_members').delete().eq('space_id', id).eq('user_id', user.id);
       if (error) throw new Error(formatError(error, "Failed to leave space"));
-
-      // Decrement member count
-      await supabase.from('spaces').update({ member_count: supabase.raw('member_count - 1') } as any).eq('id', id);
     },
 
     // Space Posts
@@ -1215,11 +1209,11 @@ export const api = {
 
     // Share post
     sharePost: async (postId: string): Promise<void> => {
-      const { error } = await supabase
-        .from('posts')
-        .update({ shares_count: supabase.raw('shares_count + 1') } as any)
-        .eq('id', postId);
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
 
+      // Use RPC to increment shares_count
+      const { error } = await supabase.rpc('increment_post_shares', { post_id: postId });
       if (error) throw new Error(formatError(error, "Failed to share post"));
     },
 
