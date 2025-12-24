@@ -75,6 +75,101 @@ export interface CartItem extends Product {
   quantity: number;
 }
 
+// Marketplace Enhancement Types
+export interface ProductReview {
+  id: string;
+  productId: string;
+  userId: string;
+  userName: string;
+  userAvatar: string;
+  rating: number;
+  reviewText: string;
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface SellerRating {
+  id: string;
+  sellerId: string;
+  buyerId: string;
+  transactionId?: string;
+  rating: number;
+  review: string;
+  createdAt: number;
+  timestamp: string;
+}
+
+export interface ProductCategory {
+  id: string;
+  name: string;
+  icon: string;
+}
+
+export interface ProductDetail extends Product {
+  sellerId: string;
+  sellerName: string;
+  sellerAvatar: string;
+  sellerRating: number;
+  sellerReviewsCount: number;
+  categoryId?: string;
+  categoryName?: string;
+  condition: 'new' | 'like-new' | 'used' | 'refurbished';
+  stockQuantity: number;
+  viewsCount: number;
+  ratingAvg: number;
+  reviewsCount: number;
+  isFeatured: boolean;
+  shippingCost: number;
+  reviews?: ProductReview[];
+}
+
+export interface MarketFilters {
+  category?: string;
+  condition?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  sortBy?: 'newest' | 'price-low' | 'price-high' | 'rating' | 'popular';
+}
+
+// Profile Enhancement Types
+export interface UserDevice {
+  id: string;
+  userId: string;
+  deviceName: string;
+  deviceType: 'mobile' | 'web' | 'desktop';
+  deviceToken: string;
+  lastActive: number;
+  createdAt: number;
+}
+
+export interface NotificationPreferences {
+  messages: boolean;
+  transactions: boolean;
+  marketplace: boolean;
+  spaces: boolean;
+  emailNotifications: boolean;
+  pushNotifications: boolean;
+}
+
+export interface PrivacySettings {
+  profileVisibility: 'public' | 'friends' | 'private';
+  showOnlineStatus: boolean;
+  showLastSeen: boolean;
+  allowMessagesFrom: 'everyone' | 'friends' | 'none';
+  showPhone: boolean;
+  showEmail: boolean;
+}
+
+export interface UserProfile extends User {
+  bio?: string;
+  phone?: string;
+  email?: string;
+  coverImage?: string;
+  location?: string;
+  website?: string;
+  lastSeen?: number;
+}
+
 export interface Space {
   id: string;
   name: string;
@@ -298,6 +393,17 @@ export interface GlobalState {
   spaceEvents: Record<string, SpaceEvent[]>;
   spaceFiles: Record<string, SpaceFile[]>;
   spaceMembers: Record<string, SpaceMember[]>;
+  // Marketplace Enhancement
+  productDetails: Record<string, ProductDetail>;
+  productReviews: Record<string, ProductReview[]>;
+  productCategories: ProductCategory[];
+  marketViewMode: 'grid' | 'list';
+  marketSearchQuery: string;
+  marketFilters: MarketFilters;
+  // Profile Enhancement
+  userDevices: UserDevice[];
+  notificationPreferences: NotificationPreferences | null;
+  privacySettings: PrivacySettings | null;
 }
 
 export type Action =
@@ -363,5 +469,23 @@ export type Action =
   | { type: 'TOGGLE_EVENT_ATTENDANCE'; payload: { spaceId: string; eventId: string; isAttending: boolean } }
   | { type: 'SET_SPACE_FILES'; payload: { spaceId: string; files: SpaceFile[] } }
   | { type: 'ADD_SPACE_FILE'; payload: { spaceId: string; file: SpaceFile } }
-  | { type: 'SET_SPACE_MEMBERS'; payload: { spaceId: string; members: SpaceMember[] } };
+  | { type: 'SET_SPACE_MEMBERS'; payload: { spaceId: string; members: SpaceMember[] } }
+  // Marketplace Actions
+  | { type: 'SET_PRODUCT_DETAIL'; payload: { productId: string; detail: ProductDetail } }
+  | { type: 'SET_PRODUCT_REVIEWS'; payload: { productId: string; reviews: ProductReview[] } }
+  | { type: 'ADD_PRODUCT_REVIEW'; payload: { productId: string; review: ProductReview } }
+  | { type: 'SET_PRODUCT_CATEGORIES'; payload: ProductCategory[] }
+  | { type: 'SET_MARKET_VIEW_MODE'; payload: 'grid' | 'list' }
+  | { type: 'SET_MARKET_SEARCH'; payload: string }
+  | { type: 'SET_MARKET_FILTERS'; payload: MarketFilters }
+  | { type: 'UPDATE_PRODUCT'; payload: { productId: string; updates: Partial<Product> } }
+  // Profile Actions
+  | { type: 'SET_USER_DEVICES'; payload: UserDevice[] }
+  | { type: 'ADD_USER_DEVICE'; payload: UserDevice }
+  | { type: 'REMOVE_USER_DEVICE'; payload: string }
+  | { type: 'SET_NOTIFICATION_PREFERENCES'; payload: NotificationPreferences }
+  | { type: 'UPDATE_NOTIFICATION_PREFERENCES'; payload: Partial<NotificationPreferences> }
+  | { type: 'SET_PRIVACY_SETTINGS'; payload: PrivacySettings }
+  | { type: 'UPDATE_PRIVACY_SETTINGS'; payload: Partial<PrivacySettings> }
+  | { type: 'UPDATE_PROFILE'; payload: Partial<UserProfile> };
 

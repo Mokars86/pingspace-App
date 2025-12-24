@@ -876,32 +876,304 @@ export const api = {
     }
   },
   market: {
+    // Get all products with optional filtering
     getProducts: async (): Promise<Product[]> => {
       try {
-        const { data, error } = await supabase.from('products').select('*');
+        const { data, error } = await supabase
+          .from('products')
+          .select('*, profiles!products_seller_id_fkey(name, avatar_url, seller_rating_avg, seller_reviews_count), product_categories(name, icon)')
+          .order('created_at', { ascending: false });
+
         if (error) throw error;
-        return ((data || []) as any[]).map(d => ({ id: d.id, title: d.title, price: d.price, image: d.image_url, seller: d.seller_name, rating: 4.5, description: d.description, category: d.category, condition: d.condition, location: d.location }));
-      } catch (e) { return []; }
+
+        return ((data || []) as any[]).map(d => ({
+          id: d.id,
+          title: d.title,
+          price: d.price,
+          image: d.image_url,
+          seller: d.profiles?.name || 'User',
+          rating: d.rating_avg || 0,
+          description: d.description,
+          category: d.product_categories?.name,
+          condition: d.condition,
+          location: d.location
+        }));
+      } catch (e) {
+        console.error('Get products error:', e);
+        return [];
+      }
     },
-    create: async (item: { title: string; price: number; image: string; description: string; category?: string; condition?: string; location?: string }): Promise<Product> => {
+
+    // Search and filter products
+    searchProducts: async (query: string, filters: any = {}) => {
+      try {
+        let queryBuilder = supabase
+          .from('products')
+          .select('*, profiles!products_seller_id_fkey(name, avatar_url, seller_rating_avg, seller_reviews_count), product_categories(name, icon)');
+
+        // Text search
+        if (query) {
+          queryBuilder = queryBuilder.or(`title.ilike.%${query}%,description.ilike.%${query}%`);
+        }
+
+        // Category filter
+        if (filters.category) {
+          queryBuilder = queryBuilder.eq('category_id', filters.category);
+        }
+
+        // Condition filter
+        if (filters.condition) {
+          queryBuilder = queryBuilder.eq('condition', filters.condition);
+        }
+
+        // Price range filter
+        if (filters.minPrice !== undefined) {
+          queryBuilder = queryBuilder.gte('price', filters.minPrice);
+        }
+        if (filters.maxPrice !== undefined) {
+          queryBuilder = queryBuilder.lte('price', filters.maxPrice);
+        }
+
+        // Sorting
+        switch (filters.sortBy) {
+          case 'price-low':
+            queryBuilder = queryBuilder.order('price', { ascending: true });
+            break;
+          case 'price-high':
+            queryBuilder = queryBuilder.order('price', { ascending: false });
+            break;
+          case 'rating':
+            queryBuilder = queryBuilder.order('rating_avg', { ascending: false });
+            break;
+          case 'popular':
+            queryBuilder = queryBuilder.order('views_count', { ascending: false });
+            break;
+          default:
+            queryBuilder = queryBuilder.order('created_at', { ascending: false });
+        }
+
+        const { data, error } = await queryBuilder.limit(50);
+        if (error) throw error;
+
+        return (data || []).map((d: any) => ({
+          id: d.id,
+          title: d.title,
+          price: d.price,
+          image: d.image_url,
+          seller: d.profiles?.name || 'User',
+          rating: d.rating_avg || 0,
+          description: d.description,
+          category: d.product_categories?.name,
+          condition: d.condition,
+          location: d.location,
+          ratingAvg: d.rating_avg,
+          reviewsCount: d.reviews_count
+        }));
+      } catch (e) {
+        console.error('Search products error:', e);
+        return [];
+      }
+    },
+
+    // Get product categories
+    getCategories: async () => {
+      try {
+        const { data, error } = await supabase
+          .from('product_categories')
+          .select('*')
+          .order('name');
+
+        if (error) throw error;
+
+        return (data || []).map((d: any) => ({
+          id: d.id,
+          name: d.name,
+          icon: d.icon
+        }));
+      } catch (e) {
+        console.error('Get categories error:', e);
+        return [];
+      }
+    },
+
+    // Get product detail
+    getProductDetail: async (productId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*, profiles!products_seller_id_fkey(id, name, avatar_url, seller_rating_avg, seller_reviews_count, total_sales), product_categories(name, icon)')
+          .eq('id', productId)
+          .single();
+
+        if (error) throw error;
+
+        const d = data as any;
+        return {
+          id: d.id,
+          title: d.title,
+          price: d.price,
+          image: d.image_url,
+          seller: d.profiles?.name || 'User',
+          rating: d.rating_avg || 0,
+          description: d.description,
+          category: d.product_categories?.name,
+          condition: d.condition,
+          location: d.location,
+          sellerId: d.seller_id,
+          sellerName: d.profiles?.name || 'User',
+          sellerAvatar: d.profiles?.avatar_url || '',
+          sellerRating: d.profiles?.seller_rating_avg || 0,
+          sellerReviewsCount: d.profiles?.seller_reviews_count || 0,
+          categoryId: d.category_id,
+          categoryName: d.product_categories?.name,
+          stockQuantity: d.stock_quantity,
+          viewsCount: d.views_count,
+          ratingAvg: d.rating_avg || 0,
+          reviewsCount: d.reviews_count || 0,
+          isFeatured: d.is_featured,
+          shippingCost: d.shipping_cost
+        };
+      } catch (e) {
+        console.error('Get product detail error:', e);
+        return null;
+      }
+    },
+
+    // Increment product views
+    incrementViews: async (productId: string) => {
+      try {
+        await supabase.rpc('increment_product_views', { product_id: productId });
+      } catch (e) {
+        console.error('Increment views error:', e);
+      }
+    },
+
+    // Get product reviews
+    getProductReviews: async (productId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('product_reviews')
+          .select('*, profiles!product_reviews_user_id_fkey(name, avatar_url)')
+          .eq('product_id', productId)
+          .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        return (data || []).map((d: any) => ({
+          id: d.id,
+          productId: d.product_id,
+          userId: d.user_id,
+          userName: d.profiles?.name || 'User',
+          userAvatar: d.profiles?.avatar_url || '',
+          rating: d.rating,
+          reviewText: d.review_text,
+          createdAt: new Date(d.created_at).getTime(),
+          timestamp: new Date(d.created_at).toLocaleDateString()
+        }));
+      } catch (e) {
+        console.error('Get reviews error:', e);
+        return [];
+      }
+    },
+
+    // Add product review
+    addProductReview: async (productId: string, rating: number, reviewText: string) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { data, error } = await supabase
+        .from('product_reviews')
+        .insert({
+          product_id: productId,
+          user_id: user.id,
+          rating,
+          review_text: reviewText
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(formatError(error, "Failed to add review"));
+
+      const d = data as any;
+      return {
+        id: d.id,
+        productId: d.product_id,
+        userId: d.user_id,
+        userName: user.name,
+        userAvatar: user.avatar,
+        rating: d.rating,
+        reviewText: d.review_text,
+        createdAt: new Date(d.created_at).getTime(),
+        timestamp: 'Just now'
+      };
+    },
+
+    // Create product
+    create: async (item: { title: string; price: number; image: string; description: string; category?: string; condition?: string; location?: string; stockQuantity?: number; shippingCost?: number }): Promise<Product> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Unauthorized");
 
       const { data, error } = await supabase.from('products').insert({
+        seller_id: user.id,
         title: item.title,
         price: item.price,
         image_url: item.image,
         description: item.description,
-        seller_name: user.user_metadata?.name || 'User', // Simple denormalization
-        category: item.category || 'General',
-        condition: item.condition || 'New',
-        location: item.location || 'Metaverse'
+        category_id: item.category,
+        condition: item.condition || 'new',
+        location: item.location || '',
+        stock_quantity: item.stockQuantity || 1,
+        shipping_cost: item.shippingCost || 0
       }).select().single();
 
       if (error) throw new Error(formatError(error, "Failed to list item"));
 
       const d = data as any;
-      return { id: d.id, title: d.title, price: d.price, image: d.image_url, seller: d.seller_name, rating: 5.0, description: d.description, category: d.category, condition: d.condition, location: d.location };
+      return {
+        id: d.id,
+        title: d.title,
+        price: d.price,
+        image: d.image_url,
+        seller: user.user_metadata?.name || 'User',
+        rating: 0,
+        description: d.description,
+        category: item.category,
+        condition: d.condition,
+        location: d.location
+      };
+    },
+
+    // Create checkout/transaction
+    createCheckout: async (productId: string, quantity: number = 1) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      // Get product details
+      const { data: product } = await supabase
+        .from('products')
+        .select('*, profiles!products_seller_id_fkey(id)')
+        .eq('id', productId)
+        .single();
+
+      if (!product) throw new Error("Product not found");
+
+      const total = (product.price + (product.shipping_cost || 0)) * quantity;
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: user.id,
+          type: 'purchase',
+          amount: total,
+          description: `Purchase: ${product.title}`,
+          status: 'pending'
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(formatError(error, "Failed to create checkout"));
+
+      return data;
     }
   },
 
@@ -1253,6 +1525,276 @@ export const api = {
         createdAt: new Date(d.created_at).getTime(),
         timestamp: 'Just now'
       };
+    }
+  },
+
+  // Profile API
+  profile: {
+    // Profile Management
+    updateProfile: async (data: Partial<any>) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name: data.name,
+          bio: data.bio,
+          phone: data.phone,
+          email: data.email,
+          location: data.location,
+          website: data.website,
+          avatar_url: data.avatar,
+          cover_image: data.coverImage
+        })
+        .eq('id', user.id);
+
+      if (error) throw new Error(formatError(error, "Failed to update profile"));
+
+      return { ...user, ...data };
+    },
+
+    uploadAvatar: async (imageUrl: string) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: imageUrl })
+        .eq('id', user.id);
+
+      if (error) throw new Error(formatError(error, "Failed to upload avatar"));
+
+      return imageUrl;
+    },
+
+    uploadCoverImage: async (imageUrl: string) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ cover_image: imageUrl })
+        .eq('id', user.id);
+
+      if (error) throw new Error(formatError(error, "Failed to upload cover image"));
+
+      return imageUrl;
+    },
+
+    // Notification Preferences
+    getNotificationPreferences: async () => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { data, error } = await supabase
+        .from('notification_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(formatError(error, "Failed to get notification preferences"));
+      }
+
+      if (!data) {
+        // Create default preferences
+        const { data: newPrefs, error: createError } = await supabase
+          .from('notification_preferences')
+          .insert({ user_id: user.id })
+          .select()
+          .single();
+
+        if (createError) throw new Error(formatError(createError, "Failed to create preferences"));
+
+        return {
+          messages: newPrefs.messages,
+          transactions: newPrefs.transactions,
+          marketplace: newPrefs.marketplace,
+          spaces: newPrefs.spaces,
+          emailNotifications: newPrefs.email_notifications,
+          pushNotifications: newPrefs.push_notifications
+        };
+      }
+
+      return {
+        messages: data.messages,
+        transactions: data.transactions,
+        marketplace: data.marketplace,
+        spaces: data.spaces,
+        emailNotifications: data.email_notifications,
+        pushNotifications: data.push_notifications
+      };
+    },
+
+    updateNotificationPreferences: async (prefs: Partial<any>) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { error } = await supabase
+        .from('notification_preferences')
+        .update({
+          messages: prefs.messages,
+          transactions: prefs.transactions,
+          marketplace: prefs.marketplace,
+          spaces: prefs.spaces,
+          email_notifications: prefs.emailNotifications,
+          push_notifications: prefs.pushNotifications,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw new Error(formatError(error, "Failed to update preferences"));
+    },
+
+    // Privacy Settings
+    getPrivacySettings: async () => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { data, error } = await supabase
+        .from('privacy_settings')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw new Error(formatError(error, "Failed to get privacy settings"));
+      }
+
+      if (!data) {
+        // Create default settings
+        const { data: newSettings, error: createError } = await supabase
+          .from('privacy_settings')
+          .insert({ user_id: user.id })
+          .select()
+          .single();
+
+        if (createError) throw new Error(formatError(createError, "Failed to create settings"));
+
+        return {
+          profileVisibility: newSettings.profile_visibility,
+          showOnlineStatus: newSettings.show_online_status,
+          showLastSeen: newSettings.show_last_seen,
+          allowMessagesFrom: newSettings.allow_messages_from,
+          showPhone: newSettings.show_phone,
+          showEmail: newSettings.show_email
+        };
+      }
+
+      return {
+        profileVisibility: data.profile_visibility,
+        showOnlineStatus: data.show_online_status,
+        showLastSeen: data.show_last_seen,
+        allowMessagesFrom: data.allow_messages_from,
+        showPhone: data.show_phone,
+        showEmail: data.show_email
+      };
+    },
+
+    updatePrivacySettings: async (settings: Partial<any>) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { error } = await supabase
+        .from('privacy_settings')
+        .update({
+          profile_visibility: settings.profileVisibility,
+          show_online_status: settings.showOnlineStatus,
+          show_last_seen: settings.showLastSeen,
+          allow_messages_from: settings.allowMessagesFrom,
+          show_phone: settings.showPhone,
+          show_email: settings.showEmail,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw new Error(formatError(error, "Failed to update settings"));
+    },
+
+    // Device Management
+    getDevices: async () => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { data, error } = await supabase
+        .from('user_devices')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('last_active', { ascending: false });
+
+      if (error) throw new Error(formatError(error, "Failed to get devices"));
+
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        userId: d.user_id,
+        deviceName: d.device_name,
+        deviceType: d.device_type,
+        deviceToken: d.device_token,
+        lastActive: new Date(d.last_active).getTime(),
+        createdAt: new Date(d.created_at).getTime()
+      }));
+    },
+
+    registerDevice: async (deviceData: Partial<any>) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      // Generate device token
+      const deviceToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+
+      const { data, error } = await supabase
+        .from('user_devices')
+        .insert({
+          user_id: user.id,
+          device_name: deviceData.deviceName || 'Unknown Device',
+          device_type: deviceData.deviceType || 'web',
+          device_token: deviceToken
+        })
+        .select()
+        .single();
+
+      if (error) throw new Error(formatError(error, "Failed to register device"));
+
+      return {
+        id: data.id,
+        userId: data.user_id,
+        deviceName: data.device_name,
+        deviceType: data.device_type,
+        deviceToken: data.device_token,
+        lastActive: new Date(data.last_active).getTime(),
+        createdAt: new Date(data.created_at).getTime()
+      };
+    },
+
+    removeDevice: async (deviceId: string) => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      const { error } = await supabase
+        .from('user_devices')
+        .delete()
+        .eq('id', deviceId)
+        .eq('user_id', user.id);
+
+      if (error) throw new Error(formatError(error, "Failed to remove device"));
+    },
+
+    generateDeviceQR: async () => {
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error("Unauthorized");
+
+      // Generate a temporary token for QR code
+      const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const qrData = JSON.stringify({
+        userId: user.id,
+        token,
+        timestamp: Date.now()
+      });
+
+      // In production, you'd use a QR code library
+      // For now, return a data URL that can be used with a QR code generator
+      return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}`;
     }
   }
 };

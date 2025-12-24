@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, ReactNode } from 'react';
-import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab, Story, CallLog } from './types';
+import { GlobalState, Action, User, Message, ChatSession, Product, Space, Transaction, Tab, Story, CallLog, ProductDetail } from './types';
 
 // --- INITIAL STATE ---
 const savedTheme = localStorage.getItem('pingspace_theme') as 'light' | 'dark' || 'light';
@@ -53,7 +53,18 @@ const initialState: GlobalState = {
   spacePosts: {},
   spaceEvents: {},
   spaceFiles: {},
-  spaceMembers: {}
+  spaceMembers: {},
+  // Marketplace Enhancement
+  productDetails: {},
+  productReviews: {},
+  productCategories: [],
+  marketViewMode: 'grid',
+  marketSearchQuery: '',
+  marketFilters: {},
+  // Profile Enhancement
+  userDevices: [],
+  notificationPreferences: null,
+  privacySettings: null
 };
 
 // --- REDUCER ---
@@ -574,6 +585,97 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         spaceMembers: { ...state.spaceMembers, [spaceId]: members }
       };
     }
+
+    // Marketplace Reducers
+    case 'SET_PRODUCT_DETAIL': {
+      const { productId, detail } = action.payload;
+      return {
+        ...state,
+        productDetails: { ...state.productDetails, [productId]: detail }
+      };
+    }
+
+    case 'SET_PRODUCT_REVIEWS': {
+      const { productId, reviews } = action.payload;
+      return {
+        ...state,
+        productReviews: { ...state.productReviews, [productId]: reviews }
+      };
+    }
+
+    case 'ADD_PRODUCT_REVIEW': {
+      const { productId, review } = action.payload;
+      const existingReviews = state.productReviews[productId] || [];
+      return {
+        ...state,
+        productReviews: { ...state.productReviews, [productId]: [review, ...existingReviews] }
+      };
+    }
+
+    case 'SET_PRODUCT_CATEGORIES':
+      return { ...state, productCategories: action.payload };
+
+    case 'SET_MARKET_VIEW_MODE':
+      return { ...state, marketViewMode: action.payload };
+
+    case 'SET_MARKET_SEARCH':
+      return { ...state, marketSearchQuery: action.payload };
+
+    case 'SET_MARKET_FILTERS':
+      return { ...state, marketFilters: action.payload };
+
+    case 'UPDATE_PRODUCT': {
+      const { productId, updates } = action.payload;
+      const updatedProductDetails = state.productDetails[productId]
+        ? { ...state.productDetails, [productId]: { ...state.productDetails[productId], ...updates } as ProductDetail }
+        : state.productDetails;
+
+      return {
+        ...state,
+        products: state.products.map(p => p.id === productId ? { ...p, ...updates } : p),
+        productDetails: updatedProductDetails
+      };
+    }
+
+    // Profile Reducers
+    case 'SET_USER_DEVICES':
+      return { ...state, userDevices: action.payload };
+
+    case 'ADD_USER_DEVICE':
+      return { ...state, userDevices: [...state.userDevices, action.payload] };
+
+    case 'REMOVE_USER_DEVICE':
+      return { ...state, userDevices: state.userDevices.filter(d => d.id !== action.payload) };
+
+    case 'SET_NOTIFICATION_PREFERENCES':
+      return { ...state, notificationPreferences: action.payload };
+
+    case 'UPDATE_NOTIFICATION_PREFERENCES':
+      return {
+        ...state,
+        notificationPreferences: state.notificationPreferences
+          ? { ...state.notificationPreferences, ...action.payload }
+          : null
+      };
+
+    case 'SET_PRIVACY_SETTINGS':
+      return { ...state, privacySettings: action.payload };
+
+    case 'UPDATE_PRIVACY_SETTINGS':
+      return {
+        ...state,
+        privacySettings: state.privacySettings
+          ? { ...state.privacySettings, ...action.payload }
+          : null
+      };
+
+    case 'UPDATE_PROFILE':
+      return {
+        ...state,
+        currentUser: state.currentUser
+          ? { ...state.currentUser, ...action.payload }
+          : null
+      };
 
     default:
       return state;

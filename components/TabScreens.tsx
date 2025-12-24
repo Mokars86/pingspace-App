@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Search, Plus, Heart, MessageCircle, Share2,
+  Search, Plus, Heart, MessageCircle, Share2, List, Grid,
   Users, ShoppingCart, ShoppingBag,
   Settings, Shield, Smartphone, HelpCircle, LogOut,
   Wallet, ArrowUpRight, ArrowDownLeft, QrCode,
@@ -19,7 +19,7 @@ import {
   MessageSquareHeart, Bug, BookOpen, ShieldAlert, Wallet as WalletIcon, ShoppingCart as MarketIcon,
   Package, Info, MapPin as LocationIcon, CheckCircle, Minus, ShoppingCart as CartIcon, MoveRight,
   Trophy, Rocket, Coffee, Palette, Gamepad2, Cpu, Type as TypeIcon, HardDrive, MonitorSmartphone,
-  Phone, Video, PhoneMissed, VideoOff, SendHorizonal, Smile
+  Phone as PhoneIcon, Video, PhoneMissed, VideoOff, SendHorizonal, Smile
 } from 'lucide-react';
 import { AreaChart, Area, Tooltip, ResponsiveContainer } from 'recharts';
 import { Space, WorkspaceWidget, Product, Story, Transaction, AppSettings, CartItem, User, CallLog } from '../types';
@@ -620,7 +620,7 @@ const SellItemModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
   );
 };
 
-const EditProfileModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+const SimpleEditProfileModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
   const { currentUser } = useGlobalState();
   const dispatch = useGlobalDispatch();
   const [name, setName] = useState(currentUser?.name || '');
@@ -1438,103 +1438,1101 @@ const CartDrawer: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen
   );
 };
 
+// Enhanced Marketplace Screen
 export const MarketplaceScreen: React.FC = () => {
-  const { products, cart } = useGlobalState();
+  const { products, cart, marketViewMode, marketSearchQuery, marketFilters, productCategories } = useGlobalState();
   const dispatch = useGlobalDispatch();
   const [showCart, setShowCart] = useState(false);
   const [showSell, setShowSell] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [filteredProducts, setFilteredProducts] = useState(products);
 
   const cartCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
+  useEffect(() => {
+    loadCategories();
+    loadProducts();
+  }, []);
+
+  useEffect(() => {
+    filterProducts();
+  }, [marketSearchQuery, marketFilters, products]);
+
+  const loadCategories = async () => {
+    if (productCategories.length === 0) {
+      const categories = await api.market.getCategories();
+      dispatch({ type: 'SET_PRODUCT_CATEGORIES', payload: categories });
+    }
+  };
+
+  const loadProducts = async () => {
+    setLoading(true);
+    try {
+      const prods = await api.market.getProducts();
+      dispatch({ type: 'SET_PRODUCTS', payload: prods });
+    } catch (e) {
+      console.error('Load products error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filterProducts = async () => {
+    if (marketSearchQuery || Object.keys(marketFilters).length > 0) {
+      setLoading(true);
+      try {
+        const results = await api.market.searchProducts(marketSearchQuery, marketFilters);
+        setFilteredProducts(results);
+      } catch (e) {
+        console.error('Filter error:', e);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setFilteredProducts(products);
+    }
+  };
+
   return (
-    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
+    <div className="min-h-full bg-gray-50 dark:bg-slate-950 overflow-y-auto no-scrollbar pb-32">
       <CartDrawer isOpen={showCart} onClose={() => setShowCart(false)} />
       <SellItemModal isOpen={showSell} onClose={() => setShowSell(false)} />
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Market</h2>
-        <div className="flex gap-2">
-          <button onClick={() => setShowSell(true)} className="p-2 bg-gray-50 dark:bg-slate-900 rounded-xl relative group hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
-            <Plus className="w-5 h-5 text-emerald-500" />
+
+      {selectedProductId && (
+        <ProductDetailModal
+          productId={selectedProductId}
+          onClose={() => setSelectedProductId(null)}
+        />
+      )}
+
+      {/* Header with Search */}
+      <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-3.5 w-5 h-5 text-slate-400" />
+            <input
+              type="text"
+              value={marketSearchQuery}
+              onChange={(e) => dispatch({ type: 'SET_MARKET_SEARCH', payload: e.target.value })}
+              placeholder="Search products..."
+              className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl py-3.5 pl-12 pr-4 text-slate-900 dark:text-white font-bold focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 transition-all"
+            />
+            {loading && <Loader2 className="absolute right-4 top-3.5 w-5 h-5 text-[#ff1744] animate-spin" />}
+          </div>
+          <button
+            onClick={() => dispatch({ type: 'SET_MARKET_VIEW_MODE', payload: marketViewMode === 'grid' ? 'list' : 'grid' })}
+            className="p-3.5 bg-gray-50 dark:bg-slate-800 rounded-2xl hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            {marketViewMode === 'grid' ? <List className="w-5 h-5" /> : <Grid className="w-5 h-5" />}
           </button>
-          <button onClick={() => setShowCart(true)} className="p-2 bg-gray-50 dark:bg-slate-900 rounded-xl relative group hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
-            <CartIcon className="w-5 h-5 text-[#ff1744]" />
-            {cartCount > 0 && <div className="absolute -top-1 -right-1 w-4 h-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[8px] font-black rounded-full flex items-center justify-center shadow-lg">{cartCount}</div>}
+          <button
+            onClick={() => setShowCart(true)}
+            className="p-3.5 bg-gray-50 dark:bg-slate-800 rounded-2xl relative hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+          >
+            <ShoppingCart className="w-5 h-5 text-[#ff1744]" />
+            {cartCount > 0 && (
+              <div className="absolute -top-1 -right-1 w-5 h-5 bg-[#ff1744] text-white text-[10px] font-black rounded-full flex items-center justify-center">
+                {cartCount}
+              </div>
+            )}
           </button>
         </div>
+
+        {/* Filter Chips */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar mb-3">
+          {productCategories.slice(0, 5).map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => {
+                const newFilters = { ...marketFilters };
+                if (newFilters.category === cat.id) {
+                  delete newFilters.category;
+                } else {
+                  newFilters.category = cat.id;
+                }
+                dispatch({ type: 'SET_MARKET_FILTERS', payload: newFilters });
+              }}
+              className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all ${marketFilters.category === cat.id
+                ? 'bg-[#ff1744] text-white shadow-lg shadow-red-500/20'
+                : 'bg-gray-100 dark:bg-slate-800 text-slate-500'
+                }`}
+            >
+              {cat.icon} {cat.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Sort Options */}
+        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+          {[
+            { value: 'newest', label: 'Newest' },
+            { value: 'price-low', label: 'Price: Low' },
+            { value: 'price-high', label: 'Price: High' },
+            { value: 'rating', label: 'Top Rated' }
+          ].map(sort => (
+            <button
+              key={sort.value}
+              onClick={() => dispatch({ type: 'SET_MARKET_FILTERS', payload: { ...marketFilters, sortBy: sort.value as any } })}
+              className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${marketFilters.sortBy === sort.value
+                ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'
+                : 'bg-gray-100 dark:bg-slate-800 text-slate-500'
+                }`}
+            >
+              {sort.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        {products.map(product => (
-          <div key={product.id} className="bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 overflow-hidden group shadow-sm flex flex-col hover:shadow-xl transition-all duration-300">
-            <div className="aspect-square relative overflow-hidden bg-slate-100">
-              <img src={product.image} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt={product.title} />
-              <div className="absolute top-3 right-3 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md px-2 py-1 rounded-lg border border-white/20 shadow-sm">
-                <span className="text-[9px] font-black uppercase text-[#ff1744] tracking-widest">${product.price}</span>
+
+      {/* Products Grid/List */}
+      <div className="p-4">
+        {loading && filteredProducts.length === 0 ? (
+          <div className="py-20 text-center">
+            <Loader2 className="w-8 h-8 mx-auto mb-4 text-[#ff1744] animate-spin" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Loading products...</p>
+          </div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="py-20 text-center opacity-30">
+            <ShoppingBag className="w-12 h-12 mx-auto mb-4 text-slate-300" />
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No products found</p>
+          </div>
+        ) : (
+          <div className={marketViewMode === 'grid' ? 'grid grid-cols-2 gap-4' : 'space-y-4'}>
+            {filteredProducts.map(product => (
+              <div
+                key={product.id}
+                onClick={() => setSelectedProductId(product.id)}
+                className={`bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden cursor-pointer hover:shadow-lg transition-all ${marketViewMode === 'list' ? 'flex gap-4' : 'flex flex-col'
+                  }`}
+              >
+                <div className={`${marketViewMode === 'grid' ? 'aspect-square' : 'w-32 h-32'} bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0`}>
+                  <img src={product.image} alt={product.title} className="w-full h-full object-cover hover:scale-110 transition-transform" />
+                </div>
+                <div className="p-4 flex-1 flex flex-col justify-between">
+                  <div>
+                    <h4 className="font-black text-slate-900 dark:text-white text-sm mb-1 line-clamp-1">{product.title}</h4>
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <Star key={i} className={`w-3 h-3 ${i <= (product.rating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                        ))}
+                      </div>
+                      <span className="text-[9px] text-slate-500">{product.rating?.toFixed(1)}</span>
+                    </div>
+                    <p className="text-xs text-slate-500 mb-2 line-clamp-2">{product.description}</p>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-black text-[#ff1744]">${product.price}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        dispatch({ type: 'ADD_TO_CART', payload: { ...product, quantity: 1 } });
+                        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to cart!' } });
+                      }}
+                      className="px-4 py-2 bg-[#ff1744] text-white rounded-xl text-[9px] font-black uppercase tracking-wider hover:scale-105 active:scale-95 transition-all"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
               </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* FAB - Post Product */}
+      <button
+        onClick={() => setShowSell(true)}
+        className="fixed bottom-24 right-6 w-14 h-14 bg-[#ff1744] text-white rounded-full shadow-2xl shadow-red-500/40 hover:scale-110 active:scale-95 transition-all flex items-center justify-center z-30"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+    </div>
+  );
+};
+
+// Product Detail Modal Component (inline for now)
+const ProductDetailModal: React.FC<{ productId: string; onClose: () => void }> = ({ productId, onClose }) => {
+  const { productDetails, productReviews } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [loading, setLoading] = useState(false);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewRating, setReviewRating] = useState(5);
+
+  const product = productDetails[productId];
+  const reviews = productReviews[productId] || [];
+
+  useEffect(() => {
+    loadProductDetail();
+  }, [productId]);
+
+  const loadProductDetail = async () => {
+    setLoading(true);
+    try {
+      const detail = await api.market.getProductDetail(productId);
+      if (detail) {
+        dispatch({ type: 'SET_PRODUCT_DETAIL', payload: { productId, detail } });
+        await api.market.incrementViews(productId);
+      }
+      const productReviews = await api.market.getProductReviews(productId);
+      dispatch({ type: 'SET_PRODUCT_REVIEWS', payload: { productId, reviews: productReviews } });
+    } catch (e) {
+      console.error('Load product detail error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddReview = async () => {
+    if (!reviewText.trim()) return;
+    try {
+      const review = await api.market.addProductReview(productId, reviewRating, reviewText);
+      dispatch({ type: 'ADD_PRODUCT_REVIEW', payload: { productId, review } });
+      setReviewText('');
+      setReviewRating(5);
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Review added!' } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  if (loading || !product) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <Loader2 className="w-8 h-8 text-white animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-gray-50 dark:bg-slate-950">
+      <div className="sticky top-0 z-20 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-gray-100 dark:border-slate-800 p-4 flex items-center justify-between">
+        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="font-black text-lg">Product Details</h2>
+        <div className="w-10" />
+      </div>
+
+      <div className="p-4 pb-32">
+        <div className="aspect-square bg-gray-100 dark:bg-slate-800 rounded-3xl overflow-hidden mb-4">
+          <img src={product.image} alt={product.title} className="w-full h-full object-cover" />
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-6 mb-4">
+          <h1 className="text-2xl font-black text-slate-900 dark:text-white mb-2">{product.title}</h1>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="text-3xl font-black text-[#ff1744]">${product.price}</span>
+            <div className="flex items-center gap-1">
+              {[1, 2, 3, 4, 5].map(i => (
+                <Star key={i} className={`w-4 h-4 ${i <= Math.round(product.ratingAvg || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+              ))}
+              <span className="text-sm text-slate-500">({product.reviewsCount})</span>
             </div>
-            <div className="p-4 flex-1 flex flex-col justify-between">
-              <h4 className="font-black text-slate-900 dark:text-white text-[10px] uppercase tracking-tight truncate mb-2">{product.title}</h4>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    dispatch({ type: 'SET_TAB', payload: 'chats' });
-                    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: `Chat started with ${product.seller}` } });
-                  }}
-                  className="flex-1 py-2.5 bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-slate-700 transition-all active:scale-95"
-                >
-                  Message
-                </button>
-                <button
-                  onClick={() => {
-                    dispatch({ type: 'ADD_TO_CART', payload: { ...product, quantity: 1 } });
-                    dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to bag' } });
-                  }}
-                  className="flex-[2] py-2.5 bg-[#ff1744] text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:shadow-lg hover:shadow-red-500/20 transition-all active:scale-95"
-                >
-                  Add
-                </button>
+          </div>
+
+          <p className="text-slate-700 dark:text-slate-300 mb-4">{product.description}</p>
+
+          <div className="flex gap-2 mb-4">
+            <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-xs font-bold">{product.condition}</span>
+            <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-xs font-bold">{product.categoryName}</span>
+          </div>
+
+          <div className="flex items-center gap-3 p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+            <img src={product.sellerAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=seller'} alt={product.sellerName} className="w-12 h-12 rounded-full object-cover" />
+            <div className="flex-1">
+              <h4 className="font-black text-slate-900 dark:text-white">{product.sellerName}</h4>
+              <div className="flex items-center gap-2">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <Star key={i} className={`w-3 h-3 ${i <= Math.round(product.sellerRating || 0) ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                ))}
+                <span className="text-xs text-slate-500">({product.sellerReviewsCount})</span>
               </div>
             </div>
           </div>
-        ))}
+        </div>
+
+        <div className="flex gap-3 mb-6">
+          <button
+            onClick={() => {
+              dispatch({ type: 'ADD_TO_CART', payload: { ...product, quantity: 1 } });
+              dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Added to cart!' } });
+            }}
+            className="flex-1 py-4 bg-gray-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all"
+          >
+            Add to Cart
+          </button>
+          <button
+            onClick={() => dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'info', message: 'Checkout coming soon!' } })}
+            className="flex-1 py-4 bg-[#ff1744] text-white rounded-2xl font-black text-sm hover:scale-105 active:scale-95 transition-all shadow-lg shadow-red-500/30"
+          >
+            Buy Now
+          </button>
+        </div>
+
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 p-6">
+          <h3 className="text-lg font-black text-slate-900 dark:text-white mb-4">Reviews ({reviews.length})</h3>
+
+          <div className="mb-6 p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-bold">Your Rating:</span>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <button key={i} onClick={() => setReviewRating(i)}>
+                    <Star className={`w-5 h-5 ${i <= reviewRating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <textarea
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+              placeholder="Write your review..."
+              className="w-full bg-white dark:bg-slate-900 rounded-xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20 mb-3"
+              rows={3}
+            />
+            <button
+              onClick={handleAddReview}
+              disabled={!reviewText.trim()}
+              className="px-4 py-2 bg-[#ff1744] text-white rounded-xl text-sm font-black hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            >
+              Submit Review
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {reviews.map(review => (
+              <div key={review.id} className="p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+                <div className="flex items-start gap-3 mb-2">
+                  <img src={review.userAvatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + review.userId} alt={review.userName} className="w-10 h-10 rounded-full object-cover" />
+                  <div className="flex-1">
+                    <h5 className="font-black text-sm">{review.userName}</h5>
+                    <div className="flex items-center gap-2">
+                      {[1, 2, 3, 4, 5].map(i => (
+                        <Star key={i} className={`w-3 h-3 ${i <= review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
+                      ))}
+                      <span className="text-xs text-slate-500">{review.timestamp}</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-slate-700 dark:text-slate-300">{review.reviewText}</p>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 // Fixed: Added missing ProfileScreen export
+// Enhanced Profile Screen
 export const ProfileScreen: React.FC = () => {
-  const { currentUser, theme } = useGlobalState();
+  const { currentUser, theme, userDevices, notificationPreferences, privacySettings } = useGlobalState();
   const dispatch = useGlobalDispatch();
   const [showEdit, setShowEdit] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showDevices, setShowDevices] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadProfileData();
+  }, []);
+
+  const loadProfileData = async () => {
+    try {
+      const [devices, notifPrefs, privSettings] = await Promise.all([
+        api.profile.getDevices(),
+        api.profile.getNotificationPreferences(),
+        api.profile.getPrivacySettings()
+      ]);
+      dispatch({ type: 'SET_USER_DEVICES', payload: devices });
+      dispatch({ type: 'SET_NOTIFICATION_PREFERENCES', payload: notifPrefs });
+      dispatch({ type: 'SET_PRIVACY_SETTINGS', payload: privSettings });
+    } catch (e) {
+      console.error('Load profile data error:', e);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setUploadingAvatar(true);
+      try {
+        // For now, use a placeholder URL. In production, upload to storage
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const imageUrl = reader.result as string;
+          await api.profile.uploadAvatar(imageUrl);
+          dispatch({ type: 'UPDATE_PROFILE', payload: { avatar: imageUrl } });
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Avatar updated!' } });
+        };
+        reader.readAsDataURL(file);
+      } catch (e: any) {
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+      } finally {
+        setUploadingAvatar(false);
+      }
+    }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setUploadingCover(true);
+      try {
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const imageUrl = reader.result as string;
+          await api.profile.uploadCoverImage(imageUrl);
+          dispatch({ type: 'UPDATE_PROFILE', payload: { coverImage: imageUrl } });
+          dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Cover image updated!' } });
+        };
+        reader.readAsDataURL(file);
+      } catch (e: any) {
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+      } finally {
+        setUploadingCover(false);
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    if (confirm('Are you sure you want to logout?')) {
+      try {
+        // Clear all user data
+        dispatch({ type: 'LOGOUT' });
+        // Clear local storage
+        localStorage.removeItem('pingspace_user');
+        localStorage.removeItem('pingspace_token');
+        // Show notification
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Logged out successfully!' } });
+        // Redirect to login (if you have a login screen, otherwise just clear state)
+      } catch (e: any) {
+        dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Logout failed' } });
+      }
+    }
+  };
 
   return (
-    <div className="min-h-full bg-white dark:bg-slate-950 p-6 overflow-y-auto no-scrollbar pb-32">
-      <EditProfileModal isOpen={showEdit} onClose={() => setShowEdit(false)} />
-      <div className="flex flex-col items-center mb-10 mt-4">
-        <div className="relative group mb-4">
-          <div className="absolute -inset-1 bg-gradient-to-tr from-[#ff1744] to-orange-400 rounded-[2.5rem] blur opacity-25 group-hover:opacity-75 transition duration-1000"></div>
-          <img src={currentUser?.avatar} className="w-28 h-28 rounded-[2.5rem] shadow-xl border-4 border-white dark:border-slate-900 relative z-10 object-cover" alt="" />
-        </div>
-        <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{currentUser?.name}</h3>
-        <div className="mt-1 px-4 py-1 bg-red-50 dark:bg-red-900/10 rounded-full border border-red-100 dark:border-red-900/20">
-          <p className="text-[#ff1744] text-[9px] font-black uppercase tracking-[0.2em]">{currentUser?.status || 'Active Node'}</p>
-        </div>
+    <div className="h-full bg-gray-50 dark:bg-slate-950 overflow-y-auto no-scrollbar">
+      {/* Modals */}
+      {showEdit && <EditProfileModal onClose={() => setShowEdit(false)} />}
+      {showWallet && <WalletModal onClose={() => setShowWallet(false)} />}
+      {showPrivacy && <PrivacySettingsModal onClose={() => setShowPrivacy(false)} />}
+      {showNotifications && <NotificationSettingsModal onClose={() => setShowNotifications(false)} />}
+      {showDevices && <LinkedDevicesModal onClose={() => setShowDevices(false)} />}
+      {showHelp && <HelpSupportModal onClose={() => setShowHelp(false)} />}
+
+      {/* Cover Image */}
+      <div className="h-48 bg-gradient-to-br from-[#ff1744] to-orange-500 relative">
+        <img
+          src={currentUser?.coverImage || 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=800'}
+          className="w-full h-full object-cover opacity-50"
+          alt="Cover"
+        />
+        <input
+          type="file"
+          ref={coverInputRef}
+          hidden
+          accept="image/*"
+          onChange={handleCoverUpload}
+        />
+        <button
+          onClick={() => coverInputRef.current?.click()}
+          disabled={uploadingCover}
+          className="absolute bottom-4 right-4 p-2 bg-black/50 backdrop-blur-sm rounded-full text-white hover:bg-black/70 transition-colors disabled:opacity-50"
+        >
+          {uploadingCover ? <Loader2 className="w-5 h-5 animate-spin" /> : <Camera className="w-5 h-5" />}
+        </button>
       </div>
 
-      <div className="space-y-6">
-        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 overflow-hidden shadow-sm">
-          <SettingRow icon={UserIcon} title="Account Data" subtitle="Personal info, username" onClick={() => setShowEdit(true)} />
-          <SettingRow icon={Bell} title="Neural Notifications" subtitle="Alerts, sounds, vibrations" value={true} isToggle />
-          <SettingRow icon={Shield} title="Link Security" subtitle="Biometrics, 2FA, encryption" />
-          <SettingRow icon={theme === 'dark' ? Sun : Moon} title="Dark Synthesis" subtitle="Visual interface mode" value={theme === 'dark'} isToggle onClick={() => dispatch({ type: 'SET_THEME', payload: theme === 'dark' ? 'light' : 'dark' })} />
-          <SettingRow icon={LogOut} title="Terminate Link" isDanger onClick={() => dispatch({ type: 'LOGOUT' })} />
+      {/* Profile Header */}
+      <div className="px-6 -mt-16 mb-6">
+        <div className="flex items-end gap-4">
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-tr from-[#ff1744] to-orange-400 rounded-3xl blur opacity-75"></div>
+            <img
+              src={currentUser?.avatar}
+              className="w-32 h-32 rounded-3xl border-4 border-white dark:border-slate-950 relative object-cover shadow-xl"
+              alt={currentUser?.name}
+            />
+            <input
+              type="file"
+              ref={avatarInputRef}
+              hidden
+              accept="image/*"
+              onChange={handleAvatarUpload}
+            />
+            <button
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute bottom-0 right-0 p-2 bg-[#ff1744] rounded-full text-white shadow-lg hover:scale-110 transition-transform disabled:opacity-50"
+            >
+              {uploadingAvatar ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+            </button>
+          </div>
+          <div className="flex-1 pb-2">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white">{currentUser?.name}</h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400">{currentUser?.status || 'Active'}</p>
+          </div>
+          <button
+            onClick={() => setShowEdit(true)}
+            className="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl font-bold text-sm hover:scale-105 transition-all mb-2"
+          >
+            Edit Profile
+          </button>
+        </div>
+        {currentUser?.bio && (
+          <p className="mt-4 text-slate-700 dark:text-slate-300">{currentUser.bio}</p>
+        )}
+      </div>
+
+      {/* Menu Sections */}
+      <div className="px-6 space-y-4 pb-32">
+        {/* Account Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+          <MenuHeader title="Account" />
+          <MenuItem icon={WalletIcon} title="Wallet" subtitle="Payments & transactions" onClick={() => setShowWallet(true)} />
         </div>
 
-        <div className="p-6 bg-slate-50 dark:bg-slate-900/50 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 text-center">
-          <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.3em] mb-2">PingSpace Protocol v1.0.4</p>
-          <p className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">Encrypted. Decentralized. Neural.</p>
+        {/* Settings Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+          <MenuHeader title="Settings" />
+          <MenuItem icon={Lock} title="Privacy" subtitle="Profile visibility & permissions" onClick={() => setShowPrivacy(true)} />
+          <MenuItem icon={Bell} title="Notifications" subtitle="Alerts & preferences" onClick={() => setShowNotifications(true)} badge={notificationPreferences?.pushNotifications ? 'On' : 'Off'} />
+          <MenuItem icon={Smartphone} title="Linked Devices" subtitle="Manage your devices" onClick={() => setShowDevices(true)} badge={userDevices.length.toString()} />
+          <MenuItem
+            icon={theme === 'dark' ? Sun : Moon}
+            title="Theme"
+            subtitle={theme === 'dark' ? 'Dark mode' : 'Light mode'}
+            onClick={() => dispatch({ type: 'SET_THEME', payload: theme === 'dark' ? 'light' : 'dark' })}
+            showToggle
+            toggleValue={theme === 'dark'}
+          />
+        </div>
+
+        {/* Support Section */}
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden">
+          <MenuHeader title="Support" />
+          <MenuItem icon={HelpCircle} title="Help & Support" subtitle="FAQs, contact us" onClick={() => setShowHelp(true)} />
+        </div>
+
+        {/* Logout */}
+        <button
+          onClick={handleLogout}
+          className="w-full bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-3xl p-4 flex items-center gap-3 hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors"
+        >
+          <LogOut className="w-5 h-5 text-red-600" />
+          <span className="font-black text-red-600">Logout</span>
+        </button>
+
+        {/* App Info */}
+        <div className="p-6 bg-gray-50 dark:bg-slate-900/50 rounded-3xl border border-gray-100 dark:border-slate-800 text-center">
+          <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">PingSpace v1.0.5</p>
+          <p className="text-[9px] text-slate-500">Encrypted • Decentralized • Neural</p>
         </div>
       </div>
     </div>
   );
 };
+
+// Menu Components
+const MenuHeader: React.FC<{ title: string }> = ({ title }) => (
+  <div className="px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-800">
+    <h3 className="text-xs font-black uppercase tracking-widest text-slate-500">{title}</h3>
+  </div>
+);
+
+const MenuItem: React.FC<{
+  icon: any;
+  title: string;
+  subtitle: string;
+  onClick?: () => void;
+  badge?: string;
+  showToggle?: boolean;
+  toggleValue?: boolean;
+}> = ({ icon: Icon, title, subtitle, onClick, badge, showToggle, toggleValue }) => (
+  <button
+    onClick={onClick}
+    className="w-full px-4 py-4 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors border-b border-gray-100 dark:border-slate-800 last:border-0"
+  >
+    <div className="p-2 bg-gray-100 dark:bg-slate-800 rounded-xl">
+      <Icon className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+    </div>
+    <div className="flex-1 text-left">
+      <h4 className="font-bold text-slate-900 dark:text-white text-sm">{title}</h4>
+      <p className="text-xs text-slate-500">{subtitle}</p>
+    </div>
+    {badge && (
+      <span className="px-2 py-1 bg-[#ff1744] text-white text-xs font-bold rounded-full">{badge}</span>
+    )}
+    {showToggle && (
+      <div className={`w-12 h-6 rounded-full transition-colors ${toggleValue ? 'bg-[#ff1744]' : 'bg-gray-300'} relative`}>
+        <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${toggleValue ? 'translate-x-6' : 'translate-x-0.5'}`} />
+      </div>
+    )}
+    {!showToggle && !badge && <ChevronRight className="w-5 h-5 text-slate-400" />}
+  </button>
+);
+
+// Edit Profile Modal
+const EditProfileModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { currentUser } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [formData, setFormData] = useState({
+    name: currentUser?.name || '',
+    bio: currentUser?.bio || '',
+    phone: currentUser?.phone || '',
+    email: currentUser?.email || '',
+    location: currentUser?.location || '',
+    website: currentUser?.website || ''
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.profile.updateProfile(formData);
+      dispatch({ type: 'UPDATE_PROFILE', payload: formData });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Profile updated!' } });
+      onClose();
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black">Edit Profile</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <input
+            type="text"
+            placeholder="Name"
+            value={formData.name}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+          />
+          <textarea
+            placeholder="Bio"
+            value={formData.bio}
+            onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
+            className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+            rows={3}
+          />
+          <input
+            type="tel"
+            placeholder="Phone"
+            value={formData.phone}
+            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+          />
+          <input
+            type="email"
+            placeholder="Email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+          />
+          <input
+            type="text"
+            placeholder="Location"
+            value={formData.location}
+            onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+          />
+          <input
+            type="url"
+            placeholder="Website"
+            value={formData.website}
+            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+            className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+          />
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-bold hover:scale-105 transition-all"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex-1 py-3 bg-[#ff1744] text-white rounded-2xl font-bold hover:scale-105 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Wallet Modal
+const WalletModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { currentUser, transactions } = useGlobalState();
+  const balance = currentUser?.balance || 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black">Wallet</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Balance Card */}
+        <div className="bg-gradient-to-br from-[#ff1744] to-orange-500 rounded-3xl p-6 mb-6 text-white">
+          <p className="text-sm opacity-80 mb-2">Total Balance</p>
+          <h3 className="text-4xl font-black">${balance.toFixed(2)}</h3>
+        </div>
+
+        {/* Recent Transactions */}
+        <h3 className="font-black mb-3">Recent Transactions</h3>
+        <div className="space-y-2">
+          {transactions.slice(0, 5).map(tx => (
+            <div key={tx.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+              <div className={`p-2 rounded-xl ${tx.type === 'credit' ? 'bg-green-100 dark:bg-green-900/20' : 'bg-red-100 dark:bg-red-900/20'}`}>
+                {tx.type === 'credit' ? <ArrowDownLeft className="w-4 h-4 text-green-600" /> : <ArrowUpRight className="w-4 h-4 text-red-600" />}
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-sm">{tx.description}</p>
+                <p className="text-xs text-slate-500">{tx.timestamp}</p>
+              </div>
+              <span className={`font-black ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                {tx.type === 'credit' ? '+' : '-'}${tx.amount}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Privacy Settings Modal
+const PrivacySettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { privacySettings } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [settings, setSettings] = useState(privacySettings || {
+    profileVisibility: 'public' as const,
+    showOnlineStatus: true,
+    showLastSeen: true,
+    allowMessagesFrom: 'everyone' as const,
+    showPhone: false,
+    showEmail: false
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.profile.updatePrivacySettings(settings);
+      dispatch({ type: 'SET_PRIVACY_SETTINGS', payload: settings });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Privacy settings updated!' } });
+      onClose();
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black">Privacy Settings</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold mb-2">Profile Visibility</label>
+            <select
+              value={settings.profileVisibility}
+              onChange={(e) => setSettings({ ...settings, profileVisibility: e.target.value as any })}
+              className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+            >
+              <option value="public">Public</option>
+              <option value="friends">Friends Only</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
+
+          <ToggleSetting
+            label="Show Online Status"
+            value={settings.showOnlineStatus}
+            onChange={(v) => setSettings({ ...settings, showOnlineStatus: v })}
+          />
+          <ToggleSetting
+            label="Show Last Seen"
+            value={settings.showLastSeen}
+            onChange={(v) => setSettings({ ...settings, showLastSeen: v })}
+          />
+          <ToggleSetting
+            label="Show Phone Number"
+            value={settings.showPhone}
+            onChange={(v) => setSettings({ ...settings, showPhone: v })}
+          />
+          <ToggleSetting
+            label="Show Email Address"
+            value={settings.showEmail}
+            onChange={(v) => setSettings({ ...settings, showEmail: v })}
+          />
+
+          <div>
+            <label className="block text-sm font-bold mb-2">Allow Messages From</label>
+            <select
+              value={settings.allowMessagesFrom}
+              onChange={(e) => setSettings({ ...settings, allowMessagesFrom: e.target.value as any })}
+              className="w-full bg-gray-50 dark:bg-slate-800 rounded-2xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff1744]/20"
+            >
+              <option value="everyone">Everyone</option>
+              <option value="friends">Friends Only</option>
+              <option value="none">No One</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button onClick={onClose} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-bold hover:scale-105 transition-all">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-[#ff1744] text-white rounded-2xl font-bold hover:scale-105 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Notification Settings Modal
+const NotificationSettingsModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { notificationPreferences } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [prefs, setPrefs] = useState(notificationPreferences || {
+    messages: true,
+    transactions: true,
+    marketplace: true,
+    spaces: true,
+    emailNotifications: false,
+    pushNotifications: true
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.profile.updateNotificationPreferences(prefs);
+      dispatch({ type: 'SET_NOTIFICATION_PREFERENCES', payload: prefs });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Notification preferences updated!' } });
+      onClose();
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black">Notifications</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <ToggleSetting label="Messages" value={prefs.messages} onChange={(v) => setPrefs({ ...prefs, messages: v })} />
+          <ToggleSetting label="Transactions" value={prefs.transactions} onChange={(v) => setPrefs({ ...prefs, transactions: v })} />
+          <ToggleSetting label="Marketplace" value={prefs.marketplace} onChange={(v) => setPrefs({ ...prefs, marketplace: v })} />
+          <ToggleSetting label="Spaces" value={prefs.spaces} onChange={(v) => setPrefs({ ...prefs, spaces: v })} />
+          <ToggleSetting label="Email Notifications" value={prefs.emailNotifications} onChange={(v) => setPrefs({ ...prefs, emailNotifications: v })} />
+          <ToggleSetting label="Push Notifications" value={prefs.pushNotifications} onChange={(v) => setPrefs({ ...prefs, pushNotifications: v })} />
+        </div>
+
+        <div className="flex gap-3 mt-6">
+          <button onClick={onClose} className="flex-1 py-3 bg-gray-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl font-bold hover:scale-105 transition-all">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-[#ff1744] text-white rounded-2xl font-bold hover:scale-105 transition-all disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Linked Devices Modal
+const LinkedDevicesModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const { userDevices } = useGlobalState();
+  const dispatch = useGlobalDispatch();
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const generateQR = async () => {
+    setLoading(true);
+    try {
+      const qr = await api.profile.generateDeviceQR();
+      setQrCode(qr);
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeDevice = async (deviceId: string) => {
+    if (!confirm('Remove this device?')) return;
+    try {
+      await api.profile.removeDevice(deviceId);
+      dispatch({ type: 'REMOVE_USER_DEVICE', payload: deviceId });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Device removed!' } });
+    } catch (e: any) {
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message } });
+    }
+  };
+
+  const getDeviceIcon = (type: string) => {
+    switch (type) {
+      case 'mobile': return PhoneIcon;
+      case 'desktop': return Monitor;
+      case 'web': return Laptop;
+      default: return Smartphone;
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-black">Linked Devices</h2>
+          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* QR Code Section */}
+        <div className="mb-6 p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl text-center">
+          <h3 className="font-bold mb-3">Link New Device</h3>
+          {qrCode ? (
+            <img src={qrCode} alt="QR Code" className="w-48 h-48 mx-auto mb-3 rounded-xl" />
+          ) : (
+            <button
+              onClick={generateQR}
+              disabled={loading}
+              className="px-6 py-3 bg-[#ff1744] text-white rounded-2xl font-bold hover:scale-105 transition-all disabled:opacity-50 flex items-center justify-center gap-2 mx-auto"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <QrCode className="w-4 h-4" />}
+              Generate QR Code
+            </button>
+          )}
+        </div>
+
+        {/* Devices List */}
+        <h3 className="font-black mb-3">Your Devices ({userDevices.length})</h3>
+        <div className="space-y-2">
+          {userDevices.map(device => {
+            const DeviceIcon = getDeviceIcon(device.deviceType);
+            return (
+              <div key={device.id} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+                <div className="p-2 bg-gray-100 dark:bg-slate-700 rounded-xl">
+                  <DeviceIcon className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-bold text-sm">{device.deviceName}</p>
+                  <p className="text-xs text-slate-500">Last active: {new Date(device.lastActive).toLocaleDateString()}</p>
+                </div>
+                <button
+                  onClick={() => removeDevice(device.id)}
+                  className="p-2 hover:bg-red-100 dark:hover:bg-red-900/20 rounded-full text-red-600 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Help & Support Modal
+const HelpSupportModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-black">Help & Support</h2>
+        <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="space-y-3">
+        <button className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+          <h4 className="font-bold mb-1">FAQs</h4>
+          <p className="text-xs text-slate-500">Frequently asked questions</p>
+        </button>
+        <button className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+          <h4 className="font-bold mb-1">Contact Support</h4>
+          <p className="text-xs text-slate-500">Get help from our team</p>
+        </button>
+        <button className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+          <h4 className="font-bold mb-1">About PingSpace</h4>
+          <p className="text-xs text-slate-500">Version 1.0.5</p>
+        </button>
+        <button className="w-full p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl text-left hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors">
+          <h4 className="font-bold mb-1">Terms & Privacy</h4>
+          <p className="text-xs text-slate-500">Legal information</p>
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// Toggle Setting Component
+const ToggleSetting: React.FC<{ label: string; value: boolean; onChange: (value: boolean) => void }> = ({ label, value, onChange }) => (
+  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800 rounded-2xl">
+    <span className="font-bold text-sm">{label}</span>
+    <button
+      onClick={() => onChange(!value)}
+      className={`w-12 h-6 rounded-full transition-colors ${value ? 'bg-[#ff1744]' : 'bg-gray-300'} relative`}
+    >
+      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${value ? 'translate-x-6' : 'translate-x-0.5'}`} />
+    </button>
+  </div>
+);
