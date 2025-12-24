@@ -207,6 +207,7 @@ export type Action =
   | { type: 'CLEAR_CART' }
   | { type: 'SEND_MESSAGE'; payload: { sessionId: string; text: string; type?: Message['type']; metadata?: any; replyTo?: Message['replyTo']; expiresAt?: number } }
   | { type: 'RECEIVE_MESSAGE'; payload: { sessionId: string; message: Message } }
+  | { type: 'MARK_CHAT_READ'; payload: string }
   | { type: 'MARK_READ'; payload: string }
   | { type: 'ADD_TRANSACTION'; payload: Transaction }
   | { type: 'ADD_CALL_LOG'; payload: CallLog }

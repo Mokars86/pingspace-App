@@ -342,25 +342,23 @@ const AddStoryModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isO
 
     setLoading(true);
     try {
-      const content = mode === 'image' ? image : textContent;
-      const newStory: Story = {
-        id: Date.now().toString(),
-        userId: 'me',
-        userName: 'Me',
-        userAvatar: 'https://ui-avatars.com/api/?name=Me&background=ff1744&color=fff',
+      const storyData = {
         type: mode,
-        content: content,
-        timestamp: 'Just now',
-        viewed: false,
+        content: mode === 'image' ? image : textContent,
         caption: mode === 'image' ? caption : undefined,
         background: mode === 'text' ? activeBg : undefined
       };
-      dispatch({ type: 'ADD_STORY', payload: newStory });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Posted successfully' } });
+
+      // Save to Supabase
+      const savedStory = await api.stories.addStory(storyData);
+
+      // Add to local state
+      dispatch({ type: 'ADD_STORY', payload: savedStory });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'success', message: 'Story posted successfully!' } });
       onClose();
       resetForm();
     } catch (e: any) {
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: 'Post failed.' } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { type: 'error', message: e.message || 'Post failed.' } });
     } finally {
       setLoading(false);
     }

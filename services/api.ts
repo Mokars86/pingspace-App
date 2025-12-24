@@ -389,16 +389,55 @@ export const api = {
       try {
         const { data, error } = await supabase.from('stories').select('*').order('created_at', { ascending: false });
         if (error) throw error;
-        return ((data || []) as any[]).map(d => ({ id: d.id, userId: d.user_id, userName: d.user_name, userAvatar: d.user_avatar, type: 'image', content: d.image_url, timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), viewed: false, caption: d.caption }));
+        return ((data || []) as any[]).map(d => ({
+          id: d.id,
+          userId: d.user_id,
+          userName: d.user_name,
+          userAvatar: d.user_avatar,
+          type: d.story_type || 'image',
+          content: d.story_type === 'text' ? d.text_content : d.image_url,
+          timestamp: new Date(d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          viewed: false,
+          caption: d.caption,
+          background: d.background
+        }));
       } catch (e) { return []; }
     },
-    addStory: async (image: string, caption: string): Promise<Story> => {
+    addStory: async (storyData: { type: 'image' | 'text'; content: string; caption?: string; background?: string }): Promise<Story> => {
       const user = await authService.getCurrentUser();
       if (!user) throw new Error("Unauthorized");
-      const { data, error } = await supabase.from('stories').insert({ user_id: user.id, user_name: user.name, user_avatar: user.avatar, image_url: image, caption }).select().single();
+
+      const insertData: any = {
+        user_id: user.id,
+        user_name: user.name,
+        user_avatar: user.avatar,
+        story_type: storyData.type,
+        caption: storyData.caption || null
+      };
+
+      if (storyData.type === 'image') {
+        insertData.image_url = storyData.content;
+      } else {
+        insertData.text_content = storyData.content;
+        insertData.background = storyData.background || 'bg-gradient-to-br from-[#ff1744] to-purple-600';
+      }
+
+      const { data, error } = await supabase.from('stories').insert(insertData).select().single();
       if (error) throw new Error(formatError(error, "Failed to share story"));
+
       const d = data as any;
-      return { id: d.id, userId: d.user_id, userName: d.user_name, userAvatar: d.user_avatar, type: 'image', content: d.image_url, timestamp: 'Just now', viewed: false, caption: d.caption };
+      return {
+        id: d.id,
+        userId: d.user_id,
+        userName: d.user_name,
+        userAvatar: d.user_avatar,
+        type: d.story_type,
+        content: d.story_type === 'text' ? d.text_content : d.image_url,
+        timestamp: 'Just now',
+        viewed: false,
+        caption: d.caption,
+        background: d.background
+      };
     }
   },
   spaces: {
@@ -456,7 +495,7 @@ export const api = {
         return ((data || []) as any[]).map(d => ({ id: d.id, title: d.title, price: d.price, image: d.image_url, seller: d.seller_name, rating: 4.5, description: d.description, category: d.category, condition: d.condition, location: d.location }));
       } catch (e) { return []; }
     },
-    create: async (item: { title: string; price: number; image: string; description: string }): Promise<Product> => {
+    create: async (item: { title: string; price: number; image: string; description: string; category?: string; condition?: string; location?: string }): Promise<Product> => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Unauthorized");
 
@@ -466,9 +505,9 @@ export const api = {
         image_url: item.image,
         description: item.description,
         seller_name: user.user_metadata?.name || 'User', // Simple denormalization
-        category: 'General',
-        condition: 'New',
-        location: 'Metaverse'
+        category: item.category || 'General',
+        condition: item.condition || 'New',
+        location: item.location || 'Metaverse'
       }).select().single();
 
       if (error) throw new Error(formatError(error, "Failed to list item"));

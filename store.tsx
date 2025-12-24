@@ -139,8 +139,23 @@ const globalReducer = (state: GlobalState, action: Action): GlobalState => {
         ...state,
         chats: state.chats.map(c =>
           c.id === sessionId
-            ? { ...c, messages: [...c.messages, message], lastMessage: message.text, lastTime: 'Now' }
+            ? {
+              ...c,
+              messages: [...c.messages, message],
+              lastMessage: message.text,
+              lastTime: 'Now',
+              unread: state.selectedChatId === sessionId ? c.unread : c.unread + 1
+            }
             : c
+        )
+      };
+    }
+
+    case 'MARK_CHAT_READ': {
+      return {
+        ...state,
+        chats: state.chats.map(c =>
+          c.id === action.payload ? { ...c, unread: 0 } : c
         )
       };
     }

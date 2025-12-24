@@ -498,7 +498,10 @@ const MainAppContent = () => {
               <ChatList
                 chats={state.chats}
                 contacts={state.contacts}
-                onSelectChat={(id) => dispatch({ type: 'SELECT_CHAT', payload: id })}
+                onSelectChat={(id) => {
+                  dispatch({ type: 'SELECT_CHAT', payload: id });
+                  dispatch({ type: 'MARK_CHAT_READ', payload: id });
+                }}
               />
             )}
             {state.activeTab === Tab.STATUS && <StatusScreen />}
