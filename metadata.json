@@ -1,0 +1,9 @@
+{
+  "name": "PingSpace",
+  "description": "A futuristic, mobile-first social ecosystem combining chat, discovery, spaces, marketplace, and a digital wallet.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
